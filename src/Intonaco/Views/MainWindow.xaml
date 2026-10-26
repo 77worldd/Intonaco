@@ -111,9 +111,16 @@
                                           Stretch="UniformToFill"
                                           LoadedBehavior="Manual"
                                           UnloadedBehavior="Close"
+                                          ScrubbingEnabled="True"
                                           IsMuted="True"
                                           Visibility="Collapsed"
                                           IsHitTestVisible="False" />
+
+                            <Image x:Name="PreviewImage"
+                                   Stretch="UniformToFill"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   Visibility="Collapsed"
+                                   IsHitTestVisible="False" />
 
                             <Border HorizontalAlignment="Right"
                                     VerticalAlignment="Bottom"

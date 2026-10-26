@@ -1,9 +1,10 @@
 # Intonaco Build Script
-# Usage: .\build.ps1 [-Configuration Release] [-Publish]
+# Usage: .\build.ps1 [-Configuration Release] [-Publish] [-Installer]
 
 param(
     [string]$Configuration = "Release",
     [switch]$Publish,
+    [switch]$Installer,
     [switch]$Clean
 )
 
@@ -36,28 +37,60 @@ if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 Write-Host "  Build succeeded." -ForegroundColor Green
 
 # Publish
-if ($Publish) {
+if ($Publish -or $Installer) {
     Write-Host "[4/4] Publishing..." -ForegroundColor Yellow
-    $PublishDir = "publish"
 
-    dotnet publish $ProjectPath `
-        -c $Configuration `
-        -r win-x64 `
-        --self-contained false `
-        -o $PublishDir `
-        --nologo `
-        /p:PublishSingleFile=true `
-        /p:IncludeNativeLibrariesForSelfExtract=true
+    if ($Publish) {
+        $PublishDir = "publish"
 
-    if ($LASTEXITCODE -ne 0) { throw "Publish failed" }
+        dotnet publish $ProjectPath `
+            -c $Configuration `
+            -r win-x64 `
+            --self-contained false `
+            -o $PublishDir `
+            --nologo `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true
 
-    $exe = Get-Item "$PublishDir\Intonaco.exe" -ErrorAction SilentlyContinue
-    if ($exe) {
-        $sizeMB = [math]::Round($exe.Length / 1MB, 2)
-        Write-Host "  Published: $($exe.FullName) ($sizeMB MB)" -ForegroundColor Green
+        if ($LASTEXITCODE -ne 0) { throw "Publish failed" }
+
+        $exe = Get-Item "$PublishDir\Intonaco.exe" -ErrorAction SilentlyContinue
+        if ($exe) {
+            $sizeMB = [math]::Round($exe.Length / 1MB, 2)
+            Write-Host "  Published: $($exe.FullName) ($sizeMB MB)" -ForegroundColor Green
+        }
+    }
+
+    if ($Installer) {
+        $InstallerPublishDir = "publish\installer-app"
+
+        dotnet publish $ProjectPath `
+            -c $Configuration `
+            -r win-x64 `
+            --self-contained true `
+            -o $InstallerPublishDir `
+            --nologo `
+            /p:PublishSingleFile=false `
+            /p:PublishReadyToRun=true
+
+        if ($LASTEXITCODE -ne 0) { throw "Installer payload publish failed" }
+
+        Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $InstallerPublishDir -Force
+
+        [xml]$projectXml = Get-Content -LiteralPath $ProjectPath
+        $version = $projectXml.Project.PropertyGroup.Version |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -First 1
+        if (-not $version) { throw "Could not read the project version." }
+
+        $setup = & ".\installer\Build-Installer.ps1" `
+            -PublishDir $InstallerPublishDir `
+            -Version $version `
+            -OutputDir "release"
+        Write-Host "  Installer: $setup" -ForegroundColor Green
     }
 } else {
-    Write-Host "[4/4] Skipping publish (use -Publish flag)" -ForegroundColor DarkGray
+    Write-Host "[4/4] Skipping publish (use -Publish and/or -Installer)" -ForegroundColor DarkGray
 }
 
 Write-Host ""
