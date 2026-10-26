@@ -83,20 +83,28 @@ jobs:
       - name: Build and smoke test Windows installer
         shell: pwsh
         run: |
-          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md artifacts/installer-app/
+          try {
+            Copy-Item LICENSE, THIRD-PARTY-NOTICES.md artifacts/installer-app/
 
-          [xml]$projectXml = Get-Content -LiteralPath src/Intonaco/Intonaco.csproj
-          $version = $projectXml.Project.PropertyGroup.Version |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-            Select-Object -First 1
-          if (-not $version) { throw "Could not read the project version." }
+            [xml]$projectXml = Get-Content -LiteralPath src/Intonaco/Intonaco.csproj
+            $version = $projectXml.Project.PropertyGroup.Version |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+              Select-Object -First 1
+            if (-not $version) { throw "Could not read the project version." }
 
-          $setup = & ./installer/Build-Installer.ps1 `
-            -PublishDir artifacts/installer-app `
-            -Version $version `
-            -OutputDir artifacts/installer
+            $setup = & ./installer/Build-Installer.ps1 `
+              -PublishDir artifacts/installer-app `
+              -Version $version `
+              -OutputDir artifacts/installer
 
-          & ./installer/Test-Installer.ps1 -SetupPath $setup
+            & ./installer/Test-Installer.ps1 -SetupPath $setup
+          }
+          catch {
+            $detail = ("$($_.Exception.Message)`n$($_.ScriptStackTrace)" -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A')
+            Write-Host "::error title=Installer build/smoke test failed::$detail"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Installer build/smoke test failed`n`n``````text`n$($_.Exception.Message)`n$($_.ScriptStackTrace)`n``````"
+            throw
+          }
 
       - name: Upload app artifacts
         uses: actions/upload-artifact@v4
