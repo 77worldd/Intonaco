@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.IO.Packaging;
 using System.Linq;
 using System.Resources;
 using System.Windows;
@@ -15,6 +16,11 @@ namespace Intonaco.Tests
     {
         private static ResourceDictionary LoadTheme()
         {
+            // The xUnit host has not created a WPF Application yet, so touch
+            // PackUriHelper first to register the pack URI parser. Without
+            // this, System.Uri treats "application:,,," as an invalid port.
+            _ = PackUriHelper.UriSchemePack;
+
             return new ResourceDictionary
             {
                 Source = new Uri(
