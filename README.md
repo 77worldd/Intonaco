@@ -1,4 +1,7 @@
-# Intonaco
+<p align="center">
+  <img src="docs/branding/intonaco-logo-light.png#gh-light-mode-only" width="360" alt="Intonaco" />
+  <img src="docs/branding/intonaco-logo-dark.png#gh-dark-mode-only" width="360" alt="Intonaco" />
+</p>
 
 [![CI](https://github.com/77worldd/Intonaco/actions/workflows/ci.yml/badge.svg)](https://github.com/77worldd/Intonaco/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/77worldd/Intonaco?display_name=tag)](https://github.com/77worldd/Intonaco/releases)
@@ -24,7 +27,7 @@ _Preview graphic rendered from the app's UI layout. Live screenshots are welcome
 - **Power-aware** — Pauses on sleep, lock, and display-off events
 - **Explorer crash recovery** — Automatically reattaches after Explorer restarts
 - **System tray** — Runs quietly in the background with tray controls
-- **Clean Windows 11 UI** — Fluent-inspired cards and controls, live desktop status, and a title bar that follows the app theme
+- **Clean Windows 11 UI** — Settings-style layout, native-sized controls and typography, restrained light/dark surfaces, and a title bar that follows the app theme
 - **Light/Dark/System theme** — Follows the Windows app theme by default, or pick Light/Dark in Settings
 
 ## Supported Formats
@@ -52,16 +55,16 @@ For best performance, use H.264 MP4 files at your screen resolution or lower.
 
 ### Portable (recommended)
 
-1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.1.0-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
-   - `Intonaco-v1.1.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites (≈60–80 MB)
-   - `Intonaco-v1.1.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
+1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.2.0-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
+   - `Intonaco-v1.2.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites (≈60–80 MB)
+   - `Intonaco-v1.2.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
 2. Extract to any folder
 3. Run `Intonaco.exe`
 
 Optionally verify your download against the `SHA256SUMS.txt` published with the release:
 
 ```powershell
-Get-FileHash .\Intonaco-v1.0.0-win-x64-self-contained.zip -Algorithm SHA256
+Get-FileHash .\Intonaco-v1.2.0-win-x64-self-contained.zip -Algorithm SHA256
 ```
 
 ### Build from source
@@ -108,7 +111,7 @@ Videos you apply are kept under **Recent wallpapers** for one-click reuse.
 | ------------------- | ------- | ------------------------------------------------------- |
 | Wallpaper fit       | Fill    | Fill (crop), Fit (letterbox), or Stretch to the screen  |
 | Playback speed      | 1.0×    | Slow dramatic loops to 0.5× or speed them up to 1.5×   |
-| Frame rate limit    | 30 fps  | Playback frame-rate preference                          |
+| Frame rate          | 30 fps  | Preferred playback frame rate                           |
 | Loop playback       | On      | Restart the video when it reaches the end               |
 | Pause on fullscreen | On      | Pauses playback when a fullscreen app is active         |
 | Start with Windows  | Off     | Launch Intonaco at login                                |
@@ -203,7 +206,7 @@ attach that file when opening an issue.
 | `dotnet build Intonaco.sln -c Release`                         | Builds app + tests                      |
 | `dotnet test Intonaco.sln -c Release`                          | Runs the xUnit test suite               |
 | `.\build.ps1 -Publish`                                         | Publishes `publish\Intonaco.exe`        |
-| `python tools/generate-icon.py`                                | Regenerates `intonaco.ico` / `.png`     |
+| `python tools/generate-icon.py`                                | Rebuilds app icons and light/dark brand lockups from `docs/branding/` |
 
 Every push is built and tested on Windows by GitHub Actions
 ([.github/workflows/ci.yml](.github/workflows/ci.yml)); version tags (`v*`)
