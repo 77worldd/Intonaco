@@ -62,6 +62,33 @@ jobs:
           --self-contained true -o publish/self-contained
           /p:Version=${{ steps.version.outputs.version }}
 
+      - name: Publish installer payload (self-contained, ReadyToRun)
+        run: >-
+          dotnet publish src/Intonaco/Intonaco.csproj -c Release -r win-x64
+          --self-contained true -o publish/installer-app
+          /p:Version=${{ steps.version.outputs.version }}
+          /p:PublishSingleFile=false /p:PublishReadyToRun=true
+
+      - name: Build and smoke test Windows installer
+        shell: pwsh
+        run: |
+          try {
+            Copy-Item LICENSE, THIRD-PARTY-NOTICES.md publish/installer-app/
+
+            $setup = & ./installer/Build-Installer.ps1 `
+              -PublishDir publish/installer-app `
+              -Version "${{ steps.version.outputs.version }}" `
+              -OutputDir release
+
+            & ./installer/Test-Installer.ps1 -SetupPath $setup
+          }
+          catch {
+            $detail = ("$($_.Exception.Message)`n$($_.ScriptStackTrace)" -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A')
+            Write-Host "::error title=Installer build/smoke test failed::$detail"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Installer build/smoke test failed`n`n``````text`n$($_.Exception.Message)`n$($_.ScriptStackTrace)`n``````"
+            throw
+          }
+
       - name: Package zips and checksums
         shell: pwsh
         run: |
@@ -77,11 +104,17 @@ jobs:
           Compress-Archive -Path publish/framework-dependent/* -DestinationPath $fd
           Compress-Archive -Path publish/self-contained/* -DestinationPath $sc
 
-          # Direct .exe download (the self-contained single file, no unzip needed).
+          # Direct portable .exe download (the self-contained single file,
+          # no unzip needed). The recommended installer was built and smoke
+          # tested into this same release folder by the previous step.
           $exe = "release/Intonaco-v$version-win-x64.exe"
           Copy-Item publish/self-contained/Intonaco.exe $exe
+          $setup = "release/Intonaco-v$version-win-x64-setup.exe"
+          if (-not (Test-Path -LiteralPath $setup)) {
+            throw "Installer was not found at $setup"
+          }
 
-          $lines = foreach ($file in @($fd, $sc, $exe)) {
+          $lines = foreach ($file in @($setup, $fd, $sc, $exe)) {
             $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $(Split-Path $file -Leaf)"
           }
@@ -100,11 +133,12 @@ jobs:
             ### Downloads
             | File | Use when |
             | --- | --- |
-            | `Intonaco-v${{ steps.version.outputs.version }}-win-x64.exe` | **Easiest** — a single executable: download it and double-click, no unzip, no prerequisites |
+            | `Intonaco-v${{ steps.version.outputs.version }}-win-x64-setup.exe` | **Recommended installer** — per-user install with Start Menu shortcut, optional desktop shortcut, clean uninstall, and no prerequisites |
+            | `Intonaco-v${{ steps.version.outputs.version }}-win-x64.exe` | **Portable** — a single executable: download it and double-click, no installation and no prerequisites |
             | `Intonaco-v${{ steps.version.outputs.version }}-win-x64-self-contained.zip` | Same self-contained build as a zip (includes LICENSE/notices) |
             | `Intonaco-v${{ steps.version.outputs.version }}-win-x64-framework-dependent.zip` | You already have the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (much smaller download) |
 
-            For the zips: extract anywhere and run `Intonaco.exe`. Verify downloads with `SHA256SUMS.txt`.
+            The installer preserves `%LocalAppData%\Intonaco` settings during upgrades/reinstalls and uninstall. For the zips: extract anywhere and run `Intonaco.exe`. Verify downloads with `SHA256SUMS.txt`.
 
             See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/CHANGELOG.md) for everything in this release, and [docs/VERIFICATION.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/docs/VERIFICATION.md) for the on-device test checklist.
           files: |

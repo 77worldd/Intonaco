@@ -11,6 +11,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Intonaco.Core;
 using Microsoft.Win32;
@@ -28,6 +29,8 @@ namespace Intonaco.Views
         private readonly ObservableCollection<RecentWallpaperItem> _recentWallpapers =
             new ObservableCollection<RecentWallpaperItem>();
         private string _fileInfoBase = string.Empty;
+        private string? _previewFilePath;
+        private bool _previewNeedsPositionSync;
 
         private static readonly HashSet<string> SupportedVideoExtensions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -62,8 +65,11 @@ namespace Intonaco.Views
 
         // Periodic desktop-placement self-check (Explorer can reshuffle
         // its desktop windows and cover the player, e.g. after a
-        // wallpaper change recreates the system WorkerW).
+        // wallpaper change recreates the system WorkerW). It is started
+        // only while a wallpaper is applied and runs less often while the
+        // wallpaper is a static suspended frame.
         private DispatcherTimer? _placementTimer;
+        private DispatcherTimer? _settingsSaveTimer;
 
         public MainWindow()
         {
@@ -181,6 +187,7 @@ namespace Intonaco.Views
             Loaded += OnWindowLoaded;
             Closing += OnWindowClosing;
             StateChanged += OnWindowStateChanged;
+            IsVisibleChanged += OnMainWindowVisibleChanged;
         }
 
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
@@ -193,17 +200,19 @@ namespace Intonaco.Views
                 source.AddHook(WndProc);
             }
 
-            _fullscreenDetector.Start();
             _systemEvents.Start();
             UpdateTitleBarTheme();
 
-            _placementTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _placementTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromSeconds(5)
+            };
             _placementTimer.Tick += (_, _) =>
             {
                 if (_isApplied)
                     _desktop.EnsurePlacement();
             };
-            _placementTimer.Start();
+            UpdateBackgroundTimers();
         }
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -488,7 +497,11 @@ namespace Intonaco.Views
             }
         }
 
-        private void ApplyWallpaper(string filePath)
+        private void ApplyWallpaper(
+            string filePath,
+            bool startPaused = false,
+            TimeSpan pausedPosition = default,
+            BitmapSource? pausedFrame = null)
         {
             ClearError();
 
@@ -499,8 +512,8 @@ namespace Intonaco.Views
             if (_playerWindow == null)
             {
                 _playerWindow = new PlayerWindow();
-                var mediaElement = _player.Initialize();
-                _playerWindow.PlayerGrid.Children.Add(mediaElement);
+                var playerHost = _player.CreateHost();
+                _playerWindow.PlayerGrid.Children.Add(playerHost);
                 _playerWindow.Show();
             }
 
@@ -528,7 +541,12 @@ namespace Intonaco.Views
             _player.StretchMode = ParseFitMode(_settings.WallpaperFit);
             _player.PlaybackSpeed = _settings.PlaybackSpeed;
             _player.LoopPlayback = _settings.LoopPlayback;
+
+            if (startPaused)
+                _player.PauseAt(pausedPosition, pausedFrame);
+
             _isApplied = true;
+            UpdateBackgroundTimers();
 
             // Update settings and recents
             _settings.RememberWallpaper(filePath);
@@ -547,6 +565,7 @@ namespace Intonaco.Views
             _isApplied = false;
             _pausedByFullscreen = false;
             _pausedBySystem = false;
+            UpdateBackgroundTimers();
 
             ClearPreview();
 
@@ -609,16 +628,98 @@ namespace Intonaco.Views
                 : duration.ToString(@"m\:ss");
         }
 
+        private bool IsPreviewWindowVisible =>
+            IsVisible && WindowState != WindowState.Minimized;
+
         private void UpdatePreview(string filePath)
         {
+            _previewFilePath = filePath;
+            RefreshPreviewForCurrentState();
+        }
+
+        private void ClearPreview()
+        {
+            _previewFilePath = null;
+            _previewNeedsPositionSync = false;
+            ReleasePreviewPipeline();
+            PreviewImage.Source = null;
+            PreviewImage.Visibility = Visibility.Collapsed;
+            PreviewPlaceholder.Visibility = Visibility.Visible;
+            PreviewStatusText.Text = "No video";
+        }
+
+        /// <summary>
+        /// Keeps the second preview decoder alive only when it can actually
+        /// be seen and the desktop player is playing. Pausing or sending the
+        /// main window to the tray closes its Media Foundation pipeline.
+        /// </summary>
+        private void RefreshPreviewForCurrentState()
+        {
+            if (_previewFilePath == null)
+            {
+                ReleasePreviewPipeline();
+                PreviewImage.Source = null;
+                PreviewImage.Visibility = Visibility.Collapsed;
+                PreviewPlaceholder.Visibility = Visibility.Visible;
+                return;
+            }
+
+            PreviewPlaceholder.Visibility = Visibility.Collapsed;
+
+            if (!IsPreviewWindowVisible)
+            {
+                ReleasePreviewPipeline();
+                PreviewImage.Source = null;
+                PreviewImage.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            switch (_player.CurrentState)
+            {
+                case WallpaperPlayer.PlaybackState.Playing:
+                    StartPreview();
+                    break;
+                case WallpaperPlayer.PlaybackState.Paused:
+                    ShowPausedPreview();
+                    break;
+                default:
+                    ReleasePreviewPipeline();
+                    PreviewImage.Source = null;
+                    PreviewImage.Visibility = Visibility.Collapsed;
+                    break;
+            }
+        }
+
+        private void StartPreview()
+        {
+            if (_previewFilePath == null || !IsPreviewWindowVisible ||
+                _player.CurrentState != WallpaperPlayer.PlaybackState.Playing)
+            {
+                return;
+            }
+
             try
             {
-                PreviewMedia.Source = new Uri(filePath, UriKind.Absolute);
-                PreviewMedia.Stretch = ParseFitMode(_settings.WallpaperFit);
+                bool sourceChanged = PreviewMedia.Source == null ||
+                    !string.Equals(
+                        PreviewMedia.Source.LocalPath,
+                        _previewFilePath,
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (sourceChanged)
+                {
+                    ReleasePreviewPipeline();
+                    PreviewMedia.Source = new Uri(_previewFilePath, UriKind.Absolute);
+                    _previewNeedsPositionSync = true;
+                }
+
+                PreviewMedia.Stretch = _player.StretchMode;
                 PreviewMedia.SpeedRatio = _player.PlaybackSpeed;
                 PreviewMedia.IsMuted = true;
                 PreviewMedia.Play();
                 PreviewMedia.Visibility = Visibility.Visible;
+                PreviewImage.Source = null;
+                PreviewImage.Visibility = Visibility.Collapsed;
                 PreviewPlaceholder.Visibility = Visibility.Collapsed;
             }
             catch
@@ -627,7 +728,33 @@ namespace Intonaco.Views
             }
         }
 
-        private void ClearPreview()
+        private void ShowPausedPreview()
+        {
+            BitmapSource? frame = _player.PausedFrame;
+
+            // If the desktop player had to use its native-pause fallback,
+            // capture the preview's own current frame before closing it.
+            if (frame == null && PreviewMedia.Source != null)
+                frame = WallpaperPlayer.CaptureFrame(PreviewMedia);
+
+            ReleasePreviewPipeline();
+
+            if (frame != null)
+            {
+                PreviewImage.Source = frame;
+                PreviewImage.Stretch = _player.StretchMode;
+                PreviewImage.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                PreviewImage.Source = null;
+                PreviewImage.Visibility = Visibility.Collapsed;
+            }
+
+            PreviewPlaceholder.Visibility = Visibility.Collapsed;
+        }
+
+        private void ReleasePreviewPipeline()
         {
             try
             {
@@ -638,8 +765,131 @@ namespace Intonaco.Views
             catch { }
 
             PreviewMedia.Visibility = Visibility.Collapsed;
-            PreviewPlaceholder.Visibility = Visibility.Visible;
-            PreviewStatusText.Text = "No video";
+        }
+
+        private void OnPausedFrameChanged(BitmapSource? frame)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(() => OnPausedFrameChanged(frame));
+                return;
+            }
+
+            if (_player.CurrentState == WallpaperPlayer.PlaybackState.Paused)
+                RefreshPreviewForCurrentState();
+        }
+
+        private void OnPreviewMediaOpened(object sender, RoutedEventArgs e)
+        {
+            if (!_previewNeedsPositionSync)
+                return;
+
+            _previewNeedsPositionSync = false;
+
+            if (!IsPreviewWindowVisible ||
+                _player.CurrentState != WallpaperPlayer.PlaybackState.Playing)
+            {
+                return;
+            }
+
+            try
+            {
+                TimeSpan desktopPosition = _player.Position;
+                if (desktopPosition > TimeSpan.FromMilliseconds(500) &&
+                    (PreviewMedia.Position - desktopPosition).Duration() >
+                        TimeSpan.FromMilliseconds(500))
+                {
+                    PreviewMedia.Position = desktopPosition;
+                }
+            }
+            catch
+            {
+                // The two MediaElements do not need sample-accurate sync.
+            }
+        }
+
+        private void OnPreviewMediaEnded(object sender, RoutedEventArgs e)
+        {
+            if (!IsPreviewWindowVisible ||
+                _player.CurrentState != WallpaperPlayer.PlaybackState.Playing ||
+                !_settings.LoopPlayback)
+            {
+                return;
+            }
+
+            try
+            {
+                PreviewMedia.Position = TimeSpan.Zero;
+                PreviewMedia.Play();
+            }
+            catch { }
+        }
+
+        private void OnMainWindowVisibleChanged(
+            object sender,
+            DependencyPropertyChangedEventArgs e)
+        {
+            if (!_isExiting)
+                RefreshPreviewForCurrentState();
+        }
+
+        private void UpdateBackgroundTimers()
+        {
+            bool shouldDetectFullscreen =
+                _isApplied &&
+                _settings.PauseOnFullscreen &&
+                (_player.CurrentState == WallpaperPlayer.PlaybackState.Playing ||
+                 _pausedByFullscreen);
+
+            if (shouldDetectFullscreen)
+                _fullscreenDetector.Start();
+            else
+                _fullscreenDetector.Stop();
+
+            if (_placementTimer == null)
+                return;
+
+            if (!_isApplied)
+            {
+                _placementTimer.Stop();
+                return;
+            }
+
+            _placementTimer.Interval =
+                _player.CurrentState == WallpaperPlayer.PlaybackState.Playing
+                    ? TimeSpan.FromSeconds(5)
+                    : TimeSpan.FromSeconds(15);
+
+            if (!_placementTimer.IsEnabled)
+                _placementTimer.Start();
+        }
+
+        private void SaveSettingsSoon()
+        {
+            if (_settingsSaveTimer == null)
+            {
+                _settingsSaveTimer = new DispatcherTimer(DispatcherPriority.Background)
+                {
+                    Interval = TimeSpan.FromMilliseconds(300)
+                };
+                _settingsSaveTimer.Tick += (_, _) =>
+                {
+                    _settingsSaveTimer.Stop();
+                    _settings.Save();
+                };
+            }
+
+            _settingsSaveTimer.Stop();
+            _settingsSaveTimer.Start();
+        }
+
+        private void FlushSettingsSave()
+        {
+            if (_settingsSaveTimer?.IsEnabled == true)
+            {
+                _settingsSaveTimer.Stop();
+                _settings.Save();
+            }
         }
 
         #endregion
@@ -703,7 +953,7 @@ namespace Intonaco.Views
 
             _settings.Volume = _player.Volume;
             _settings.IsMuted = _player.IsMuted;
-            _settings.Save();
+            SaveSettingsSoon();
             UpdateMuteButton();
         }
 
@@ -723,6 +973,7 @@ namespace Intonaco.Views
             _settings.PauseOnFullscreen = PauseFullscreenToggle.IsChecked == true;
             _fullscreenDetector.IsEnabled = _settings.PauseOnFullscreen;
             _settings.Save();
+            UpdateBackgroundTimers();
         }
 
         private void OnStartupChanged(object sender, RoutedEventArgs e)
@@ -854,6 +1105,24 @@ namespace Intonaco.Views
 
         private void OnPlayerStateChanged(WallpaperPlayer.PlaybackState state)
         {
+            // Resource lifecycle changes happen immediately on the UI thread;
+            // only the status/control refresh below is queued.
+            if (Dispatcher.CheckAccess())
+            {
+                RefreshPreviewForCurrentState();
+                UpdateBackgroundTimers();
+
+                if (state == WallpaperPlayer.PlaybackState.Paused)
+                {
+                    PerformanceMonitor.SchedulePausedCollection(
+                        Dispatcher,
+                        () => !_isExiting &&
+                              _player.CurrentState == WallpaperPlayer.PlaybackState.Paused &&
+                              _player.IsSuspended &&
+                              PreviewMedia.Source == null);
+                }
+            }
+
             Dispatcher.BeginInvoke(() =>
             {
                 switch (state)
@@ -907,6 +1176,8 @@ namespace Intonaco.Views
 
                 UpdateMuteButton();
                 UpdateDesktopStatus(state);
+                RefreshPreviewForCurrentState();
+                UpdateBackgroundTimers();
             });
         }
 
@@ -989,9 +1260,11 @@ namespace Intonaco.Views
         {
             Dispatcher.BeginInvoke(() =>
             {
-                _pausedBySystem = true;
                 if (_player.CurrentState == WallpaperPlayer.PlaybackState.Playing)
+                {
+                    _pausedBySystem = true;
                     _player.Pause();
+                }
             });
         }
 
@@ -1025,6 +1298,9 @@ namespace Intonaco.Views
                 if (_isApplied)
                 {
                     _desktop.ResizeToDesktop();
+                    _playerWindow?.UpdateLayout();
+                    if (_player.IsSuspended)
+                        _player.RefreshPausedFrame();
                 }
             });
         }
@@ -1042,11 +1318,15 @@ namespace Intonaco.Views
 
             string? path = _player.CurrentFilePath ?? _settings.LastWallpaperPath;
             var state = _player.CurrentState;
+            TimeSpan position = _player.Position;
+            BitmapSource? pausedFrame = _player.PausedFrame;
             if (!string.IsNullOrEmpty(path) && File.Exists(path))
             {
-                ApplyWallpaper(path);
-                if (state == WallpaperPlayer.PlaybackState.Paused)
-                    _player.Pause();
+                ApplyWallpaper(
+                    path,
+                    startPaused: state == WallpaperPlayer.PlaybackState.Paused,
+                    pausedPosition: position,
+                    pausedFrame: pausedFrame);
             }
         }
 
@@ -1072,6 +1352,10 @@ namespace Intonaco.Views
         {
             if (WindowState == WindowState.Minimized)
             {
+                FlushSettingsSave();
+                ReleasePreviewPipeline();
+                PreviewImage.Source = null;
+                PreviewImage.Visibility = Visibility.Collapsed;
                 Hide();
                 ShowInTaskbar = false;
             }
@@ -1079,6 +1363,8 @@ namespace Intonaco.Views
 
         private void OnWindowClosing(object? sender, CancelEventArgs e)
         {
+            FlushSettingsSave();
+
             if (!_isExiting)
             {
                 // Minimize to tray instead of closing
@@ -1089,6 +1375,7 @@ namespace Intonaco.Views
 
             // Actual shutdown
             _placementTimer?.Stop();
+            _settingsSaveTimer?.Stop();
             _fullscreenDetector.Dispose();
             _systemEvents.Dispose();
             StopWallpaper();
@@ -1104,6 +1391,7 @@ namespace Intonaco.Views
             WindowState = WindowState.Normal;
             Activate();
             Focus();
+            RefreshPreviewForCurrentState();
         }
 
         #endregion
