@@ -72,14 +72,22 @@ jobs:
       - name: Build and smoke test Windows installer
         shell: pwsh
         run: |
-          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md publish/installer-app/
+          try {
+            Copy-Item LICENSE, THIRD-PARTY-NOTICES.md publish/installer-app/
 
-          $setup = & ./installer/Build-Installer.ps1 `
-            -PublishDir publish/installer-app `
-            -Version "${{ steps.version.outputs.version }}" `
-            -OutputDir release
+            $setup = & ./installer/Build-Installer.ps1 `
+              -PublishDir publish/installer-app `
+              -Version "${{ steps.version.outputs.version }}" `
+              -OutputDir release
 
-          & ./installer/Test-Installer.ps1 -SetupPath $setup
+            & ./installer/Test-Installer.ps1 -SetupPath $setup
+          }
+          catch {
+            $detail = ("$($_.Exception.Message)`n$($_.ScriptStackTrace)" -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A')
+            Write-Host "::error title=Installer build/smoke test failed::$detail"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Installer build/smoke test failed`n`n``````text`n$($_.Exception.Message)`n$($_.ScriptStackTrace)`n``````"
+            throw
+          }
 
       - name: Package zips and checksums
         shell: pwsh
