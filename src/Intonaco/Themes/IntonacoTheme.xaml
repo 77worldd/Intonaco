@@ -2,28 +2,31 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
-    <!-- Windows 11 inspired color palette - Dark theme -->
-    <Color x:Key="WindowBackgroundColor">#FF17191D</Color>
-    <Color x:Key="CardBackgroundColor">#FF22242A</Color>
-    <Color x:Key="CardBorderColor">#FF34363F</Color>
+    <!-- Windows 11 / WinUI-style neutral palette - Dark theme.
+         Brand color is used sparingly: the logo supplies the deep navy,
+         while interactive accents use a softer cyan derived from it. -->
+    <Color x:Key="WindowBackgroundColor">#FF202020</Color>
+    <Color x:Key="CardBackgroundColor">#FF2B2B2B</Color>
+    <Color x:Key="CardBorderColor">#FF3A3A3A</Color>
     <Color x:Key="TextPrimaryColor">#FFFFFFFF</Color>
-    <Color x:Key="TextSecondaryColor">#FFA7AAB3</Color>
-    <Color x:Key="AccentColor">#FF0078D4</Color>
-    <Color x:Key="AccentHoverColor">#FF2B8FE0</Color>
-    <Color x:Key="AccentPressedColor">#FF006CBE</Color>
-    <Color x:Key="ButtonBackgroundColor">#FF2A2C33</Color>
-    <Color x:Key="ButtonHoverColor">#FF35373F</Color>
-    <Color x:Key="ButtonPressedColor">#FF24262C</Color>
-    <Color x:Key="ButtonBorderColor">#FF3D4049</Color>
-    <Color x:Key="DividerColor">#FF30323A</Color>
-    <Color x:Key="InputBackgroundColor">#FF24262C</Color>
-    <Color x:Key="InputHoverColor">#FF2C2E35</Color>
-    <Color x:Key="InputBorderColor">#FF3D4049</Color>
-    <Color x:Key="SubtleBackgroundColor">#FF26282F</Color>
-    <Color x:Key="PreviewBackgroundColor">#FF101116</Color>
-    <Color x:Key="TrackBackgroundColor">#FF3A3D46</Color>
-    <Color x:Key="ErrorColor">#FFFF6B6B</Color>
-    <Color x:Key="SuccessColor">#FF51D88A</Color>
+    <Color x:Key="TextSecondaryColor">#FFB3B3B3</Color>
+    <Color x:Key="AccentColor">#FF4FD8E8</Color>
+    <Color x:Key="AccentHoverColor">#FF69E2F0</Color>
+    <Color x:Key="AccentPressedColor">#FF30C2D6</Color>
+    <Color x:Key="AccentForegroundColor">#FF06303D</Color>
+    <Color x:Key="ButtonBackgroundColor">#FF383838</Color>
+    <Color x:Key="ButtonHoverColor">#FF3F3F3F</Color>
+    <Color x:Key="ButtonPressedColor">#FF343434</Color>
+    <Color x:Key="ButtonBorderColor">#FF454545</Color>
+    <Color x:Key="DividerColor">#FF3A3A3A</Color>
+    <Color x:Key="InputBackgroundColor">#FF383838</Color>
+    <Color x:Key="InputHoverColor">#FF3F3F3F</Color>
+    <Color x:Key="InputBorderColor">#FF4A4A4A</Color>
+    <Color x:Key="SubtleBackgroundColor">#FF333333</Color>
+    <Color x:Key="PreviewBackgroundColor">#FF111111</Color>
+    <Color x:Key="TrackBackgroundColor">#FF6A6A6A</Color>
+    <Color x:Key="ErrorColor">#FFFF99A4</Color>
+    <Color x:Key="SuccessColor">#FF6CCB5F</Color>
 
     <!-- Brushes -->
     <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{StaticResource WindowBackgroundColor}" />
@@ -34,6 +37,7 @@
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
     <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}" />
     <SolidColorBrush x:Key="AccentPressedBrush" Color="{StaticResource AccentPressedColor}" />
+    <SolidColorBrush x:Key="AccentForegroundBrush" Color="{StaticResource AccentForegroundColor}" />
     <SolidColorBrush x:Key="ButtonBackgroundBrush" Color="{StaticResource ButtonBackgroundColor}" />
     <SolidColorBrush x:Key="ButtonHoverBrush" Color="{StaticResource ButtonHoverColor}" />
     <SolidColorBrush x:Key="ButtonPressedBrush" Color="{StaticResource ButtonPressedColor}" />
@@ -45,39 +49,140 @@
     <SolidColorBrush x:Key="SubtleBackgroundBrush" Color="{StaticResource SubtleBackgroundColor}" />
     <SolidColorBrush x:Key="PreviewBackgroundBrush" Color="{StaticResource PreviewBackgroundColor}" />
     <SolidColorBrush x:Key="TrackBackgroundBrush" Color="{StaticResource TrackBackgroundColor}" />
-    <SolidColorBrush x:Key="AccentSoftBrush" Color="#330078D4" />
-    <SolidColorBrush x:Key="SuccessSoftBrush" Color="#2651D88A" />
-    <SolidColorBrush x:Key="ErrorSoftBrush" Color="#26FF6B6B" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#264FD8E8" />
+    <SolidColorBrush x:Key="SuccessSoftBrush" Color="#266CCB5F" />
+    <SolidColorBrush x:Key="ErrorSoftBrush" Color="#26FF99A4" />
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
-    <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#FF2B9BEB" Offset="0" />
-        <GradientStop Color="#FF0078D4" Offset="0.55" />
-        <GradientStop Color="#FF5B5BD6" Offset="1" />
-    </LinearGradientBrush>
+    <!-- Retained for resource compatibility; the native UI uses a solid accent. -->
+    <SolidColorBrush x:Key="AccentGradientBrush" Color="{StaticResource AccentColor}" />
 
-    <!-- Typography -->
-    <FontFamily x:Key="DefaultFont">Segoe UI Variable, Segoe UI, sans-serif</FontFamily>
+    <!-- Typography: Variable Text for controls/body, Display for headings. -->
+    <FontFamily x:Key="DefaultFont">Segoe UI Variable Text, Segoe UI Variable, Segoe UI, sans-serif</FontFamily>
+    <FontFamily x:Key="HeadingFont">Segoe UI Variable Display, Segoe UI Variable, Segoe UI, sans-serif</FontFamily>
+    <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
     <sys:Double x:Key="FontSizeCaption">12</sys:Double>
     <sys:Double x:Key="FontSizeBody">14</sys:Double>
     <sys:Double x:Key="FontSizeSubtitle">16</sys:Double>
     <sys:Double x:Key="FontSizeTitle">20</sys:Double>
 
-    <!-- Corner radius matching Windows 11 -->
-    <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
-    <CornerRadius x:Key="CardCornerRadius">12</CornerRadius>
-    <CornerRadius x:Key="WindowCornerRadius">12</CornerRadius>
+    <!-- WinUI radii: 4 px controls, 8 px cards/overlays. -->
+    <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
+    <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
+    <CornerRadius x:Key="WindowCornerRadius">8</CornerRadius>
 
-    <!-- Button Style -->
+    <!-- Shared text styles keep the settings page visually consistent. -->
+    <Style x:Key="PageTitleText" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource HeadingFont}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeTitle}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="SectionTitleText" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource HeadingFont}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="SettingTitleText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="SettingDescriptionText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="Margin" Value="0,2,12,0" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="CaptionText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+
+    <!-- Thin Windows 11-style scrollbar (no legacy arrow buttons). -->
+    <Style x:Key="ScrollBarPageButton" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ScrollBarThumb" TargetType="Thumb">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border Background="{DynamicResource TrackBackgroundBrush}"
+                            CornerRadius="4"
+                            Margin="1,0"
+                            SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type ScrollBar}">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="MinWidth" Value="8" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="Transparent" SnapsToDevicePixels="True">
+                        <Track x:Name="PART_Track"
+                               IsDirectionReversed="True"
+                               Orientation="{TemplateBinding Orientation}"
+                               Minimum="{TemplateBinding Minimum}"
+                               Maximum="{TemplateBinding Maximum}"
+                               Value="{Binding Value, RelativeSource={RelativeSource TemplatedParent}}"
+                               ViewportSize="{TemplateBinding ViewportSize}">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource ScrollBarPageButton}"
+                                              Command="ScrollBar.PageUpCommand" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource ScrollBarThumb}" />
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource ScrollBarPageButton}"
+                                              Command="ScrollBar.PageDownCommand" />
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Orientation" Value="Horizontal">
+                            <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
+                            <Setter Property="Width" Value="Auto" />
+                            <Setter Property="Height" Value="8" />
+                            <Setter Property="MinHeight" Value="8" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Standard WinUI-like button -->
     <Style x:Key="IntonacoButton" TargetType="Button">
         <Setter Property="Background" Value="{DynamicResource ButtonBackgroundBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="14,5" />
         <Setter Property="FontFamily" Value="{StaticResource DefaultFont}" />
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
-        <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
@@ -89,7 +194,7 @@
                             CornerRadius="{StaticResource ControlCornerRadius}"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
-                        <ContentPresenter HorizontalAlignment="Center"
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -101,8 +206,12 @@
                             <Setter TargetName="Bd" Property="Background"
                                     Value="{DynamicResource ButtonPressedBrush}" />
                         </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush"
+                                    Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.4" />
+                            <Setter Property="Opacity" Value="0.45" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -110,12 +219,12 @@
         </Setter>
     </Style>
 
-    <!-- Accent Button Style -->
+    <!-- Solid accent button; no gradient, matching WinUI's primary action. -->
     <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource IntonacoButton}">
-        <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-        <Setter Property="Foreground" Value="White" />
-        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+        <Setter Property="FontWeight" Value="Normal" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -149,16 +258,15 @@
 
     <!-- Icon Button Style -->
     <Style x:Key="IconButton" TargetType="Button">
-        <Setter Property="Background" Value="{DynamicResource SubtleBackgroundBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ButtonBackgroundBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Width" Value="38" />
-        <Setter Property="Height" Value="38" />
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
-        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -166,7 +274,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="10"
+                            CornerRadius="{StaticResource ControlCornerRadius}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center" />
@@ -198,14 +306,13 @@
         <Setter Property="Padding" Value="8,5" />
     </Style>
 
-    <!-- Full-width recent wallpaper row -->
+    <!-- Quiet Settings-list row used for recent wallpapers. -->
     <Style x:Key="RecentItemButton" TargetType="Button">
-        <Setter Property="Background" Value="{DynamicResource SubtleBackgroundBrush}" />
+        <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="10,8" />
-        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="10,6" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Template">
             <Setter.Value>
@@ -214,7 +321,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="10"
+                            CornerRadius="{StaticResource ControlCornerRadius}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="Center" />
@@ -223,6 +330,8 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Background"
                                     Value="{DynamicResource ButtonHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush"
                                     Value="{DynamicResource AccentBrush}" />
                         </Trigger>
@@ -239,45 +348,73 @@
         </Setter>
     </Style>
 
-    <!-- Toggle Switch Style -->
+    <!-- WinUI-style settings toggle: label on the left, 40x20 switch on the right. -->
     <Style x:Key="IntonacoToggle" TargetType="CheckBox">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource DefaultFont}" />
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
-        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <StackPanel Orientation="Horizontal">
-                        <Grid Width="44" Height="24" Margin="0,0,12,0" VerticalAlignment="Center">
+                    <Grid Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <ContentPresenter Grid.Column="0"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,16,0" />
+
+                        <Grid Grid.Column="1" Width="40" Height="20" VerticalAlignment="Center">
                             <Border x:Name="Track"
-                                    Background="{DynamicResource TrackBackgroundBrush}"
-                                    BorderBrush="{DynamicResource ButtonBorderBrush}"
+                                    Background="Transparent"
+                                    BorderBrush="{DynamicResource TextSecondaryBrush}"
                                     BorderThickness="1"
-                                    CornerRadius="12"
+                                    CornerRadius="10"
                                     SnapsToDevicePixels="True" />
                             <Border x:Name="Thumb"
-                                    Width="18" Height="18"
-                                    CornerRadius="9"
-                                    Background="White"
+                                    Width="12" Height="12"
+                                    CornerRadius="6"
+                                    Background="{DynamicResource TextSecondaryBrush}"
                                     HorizontalAlignment="Left"
-                                    Margin="3,0,0,0"
+                                    Margin="4,0,0,0"
                                     SnapsToDevicePixels="True" />
                         </Grid>
-                        <ContentPresenter VerticalAlignment="Center" />
-                    </StackPanel>
+                    </Grid>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Thumb" Property="Width" Value="14" />
+                            <Setter TargetName="Thumb" Property="Height" Value="14" />
+                            <Setter TargetName="Thumb" Property="Margin" Value="3,0,0,0" />
+                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Track" Property="Background"
                                     Value="{DynamicResource AccentBrush}" />
                             <Setter TargetName="Track" Property="BorderBrush"
                                     Value="{DynamicResource AccentBrush}" />
-                            <Setter TargetName="Thumb" Property="HorizontalAlignment"
-                                    Value="Right" />
-                            <Setter TargetName="Thumb" Property="Margin"
-                                    Value="0,0,3,0" />
+                            <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
+                            <Setter TargetName="Thumb" Property="Margin" Value="0,0,4,0" />
                             <Setter TargetName="Thumb" Property="Background"
-                                    Value="White" />
+                                    Value="{DynamicResource AccentForegroundBrush}" />
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsMouseOver" Value="True" />
+                                <Condition Property="IsChecked" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Thumb" Property="Margin" Value="0,0,3,0" />
+                        </MultiTrigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Track" Property="BorderBrush"
+                                    Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -285,63 +422,99 @@
         </Setter>
     </Style>
 
-    <!-- Slider Style -->
+    <!-- Slider: 32 px interaction height, 4 px track, 22 px WinUI-style thumb. -->
+    <Style x:Key="SliderTrackButton" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Grid Height="32" Background="Transparent">
+                        <Border Height="4"
+                                CornerRadius="2"
+                                Background="{TemplateBinding Background}"
+                                VerticalAlignment="Center"
+                                SnapsToDevicePixels="True" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SliderThumbStyle" TargetType="Thumb">
+        <Setter Property="Width" Value="22" />
+        <Setter Property="Height" Value="22" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Grid Width="22" Height="22" Background="Transparent">
+                        <Ellipse x:Name="Outer"
+                                 Fill="White"
+                                 Stroke="{DynamicResource TrackBackgroundBrush}"
+                                 StrokeThickness="1" />
+                        <Ellipse x:Name="Inner"
+                                 Width="8" Height="8"
+                                 Fill="{DynamicResource AccentBrush}"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Inner" Property="Width" Value="10" />
+                            <Setter TargetName="Inner" Property="Height" Value="10" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Inner" Property="Width" Value="6" />
+                            <Setter TargetName="Inner" Property="Height" Value="6" />
+                            <Setter TargetName="Outer" Property="Stroke"
+                                    Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="IntonacoSlider" TargetType="Slider">
         <Setter Property="Minimum" Value="0" />
         <Setter Property="Maximum" Value="100" />
-        <Setter Property="Height" Value="28" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="IsMoveToPointEnabled" Value="True" />
+        <Setter Property="IsSnapToTickEnabled" Value="True" />
+        <Setter Property="TickFrequency" Value="1" />
+        <Setter Property="SmallChange" Value="1" />
+        <Setter Property="LargeChange" Value="10" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
-                    <Grid Background="Transparent">
-                        <Track x:Name="PART_Track" Height="28">
+                    <Grid Height="32"
+                          Background="Transparent"
+                          VerticalAlignment="Center"
+                          SnapsToDevicePixels="True">
+                        <Track x:Name="PART_Track" Height="32">
                             <Track.DecreaseRepeatButton>
-                                <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
-                                    <RepeatButton.Template>
-                                        <ControlTemplate TargetType="RepeatButton">
-                                            <Grid Background="Transparent">
-                                                <Border Height="4"
-                                                        CornerRadius="2"
-                                                        Background="{DynamicResource AccentBrush}"
-                                                        VerticalAlignment="Center" />
-                                            </Grid>
-                                        </ControlTemplate>
-                                    </RepeatButton.Template>
-                                </RepeatButton>
+                                <RepeatButton Style="{StaticResource SliderTrackButton}"
+                                              Command="Slider.DecreaseLarge"
+                                              Background="{DynamicResource AccentBrush}" />
                             </Track.DecreaseRepeatButton>
                             <Track.Thumb>
-                                <Thumb Width="18" Height="18" Cursor="Hand">
-                                    <Thumb.Template>
-                                        <ControlTemplate TargetType="Thumb">
-                                            <Grid Width="18" Height="18">
-                                                <Ellipse Fill="White"
-                                                         Stroke="{DynamicResource AccentBrush}"
-                                                         StrokeThickness="2" />
-                                                <Ellipse Width="6" Height="6"
-                                                         Fill="{DynamicResource AccentBrush}"
-                                                         HorizontalAlignment="Center"
-                                                         VerticalAlignment="Center" />
-                                            </Grid>
-                                        </ControlTemplate>
-                                    </Thumb.Template>
-                                </Thumb>
+                                <Thumb Style="{StaticResource SliderThumbStyle}" />
                             </Track.Thumb>
                             <Track.IncreaseRepeatButton>
-                                <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
-                                    <RepeatButton.Template>
-                                        <ControlTemplate TargetType="RepeatButton">
-                                            <Grid Background="Transparent">
-                                                <Border Height="4"
-                                                        CornerRadius="2"
-                                                        Background="{DynamicResource TrackBackgroundBrush}"
-                                                        VerticalAlignment="Center" />
-                                            </Grid>
-                                        </ControlTemplate>
-                                    </RepeatButton.Template>
-                                </RepeatButton>
+                                <RepeatButton Style="{StaticResource SliderTrackButton}"
+                                              Command="Slider.IncreaseLarge"
+                                              Background="{DynamicResource TrackBackgroundBrush}" />
                             </Track.IncreaseRepeatButton>
                         </Track>
                     </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -352,14 +525,15 @@
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource DefaultFont}" />
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
-        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="MinHeight" Value="32" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
                     <Border x:Name="Bd"
                             Background="Transparent"
-                            CornerRadius="6"
+                            CornerRadius="{StaticResource ControlCornerRadius}"
                             Padding="{TemplateBinding Padding}"
                             Margin="0,1">
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -391,9 +565,10 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="FontFamily" Value="{StaticResource DefaultFont}" />
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
-        <Setter Property="Padding" Value="10,6,30,6" />
-        <Setter Property="Height" Value="34" />
-        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="10,5,30,5" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="MaxDropDownHeight" Value="224" />
         <Setter Property="ItemContainerStyle" Value="{StaticResource IntonacoComboBoxItem}" />
         <Setter Property="Template">
             <Setter.Value>
@@ -467,7 +642,7 @@
                                 <Border Background="{DynamicResource CardBackgroundBrush}"
                                         BorderBrush="{DynamicResource CardBorderBrush}"
                                         BorderThickness="1"
-                                        CornerRadius="10"
+                                        CornerRadius="{StaticResource CardCornerRadius}"
                                         Padding="4"
                                         Margin="0,4,0,0">
                                     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
@@ -500,7 +675,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
-        <Setter Property="Padding" Value="18" />
+        <Setter Property="Padding" Value="16" />
     </Style>
 
 </ResourceDictionary>

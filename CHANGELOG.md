@@ -4,6 +4,47 @@ All notable changes to Intonaco are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-10-26
+
+Brand and interface refinement release. The user-verified desktop
+integration from v1.0.3 remains unchanged.
+
+### Added
+
+- **New Intonaco identity:** the supplied navy/cyan cat-and-image mark is
+  now the application icon used by the EXE, Windows taskbar, window title
+  bar and system tray, and appears in the app header.
+- A proper multi-resolution Windows `.ico` (16, 20, 24, 32, 48, 64, 128 and
+  256 px) generated from the transparent logo master.
+- Light and dark full-logo lockups under `docs/branding/`, plus a
+  reproducible `tools/generate-icon.py` asset pipeline.
+
+### Changed
+
+- Reworked the main window from the decorative v1.1 presentation into a
+  quieter **Windows 11 Settings-style layout**: neutral `#F3F3F3`/`#202020`
+  surfaces, 8 px cards, 4 px controls, 32 px control heights, standard
+  separators, Segoe UI Variable typography and plain setting labels.
+- Removed accent gradients, oversized radii, hand cursors, colored recent
+  tiles, the status pill and the preview gradient footer.
+- Recent wallpapers now use compact two-column list rows, so all six are
+  visible without taking over the page.
+- Toggle switches now use the Windows settings arrangement—label and
+  description on the left, compact 40×20 switch on the right.
+- The title-bar caption and text colors now match the app surface on
+  Windows 11, in addition to immersive dark mode.
+- The interface uses the logo's navy/cyan only for the mark and primary
+  action; the rest of the app stays neutral like Windows Settings.
+
+### Fixed
+
+- **Volume slider:** rebuilt with a 32 px interaction area, a continuous
+  4 px filled track, a 22 px thumb with hover/drag states,
+  click-to-position behavior, 1% snapping and consistent centering in the
+  playback row.
+- Replaced the legacy visible scrollbar appearance with a thin Windows
+  11-style scrollbar.
+
 ## [1.1.0] — 2026-10-26
 
 A creativity and polish release built on the user-verified v1.0.3 desktop
