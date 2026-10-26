@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\intonaco.ico</ApplicationIcon>
+    <AssemblyName>Intonaco</AssemblyName>
+    <RootNamespace>Intonaco</RootNamespace>
+    <Title>Intonaco</Title>
+    <Product>Intonaco</Product>
+    <Description>Lightweight live wallpaper for Windows 11</Description>
+    <Company>Intonaco</Company>
+    <Copyright>Copyright © 2026 Intonaco Contributors</Copyright>
+    <Authors>Intonaco Contributors</Authors>
+    <Version>1.0.0</Version>
+    <!-- RuntimeIdentifier / SelfContained are supplied by publish commands
+         (build.ps1, CI) so plain `dotnet build` / `dotnet test` stay RID-agnostic. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Nullable>enable</Nullable>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\**" />
+    <Resource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
+  </ItemGroup>
+
+</Project>
