@@ -50,7 +50,7 @@ For best performance, use H.264 MP4 files at your screen resolution or lower.
 
 ### Portable (recommended)
 
-1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.0.1-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
+1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.0.2-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
    - `Intonaco-v1.0.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites (≈60–80 MB)
    - `Intonaco-v1.0.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
 2. Extract to any folder
@@ -156,6 +156,18 @@ Intonaco.exe (single process)
 
 - This can happen if Intonaco fails to find the correct WorkerW window
 - Restart Explorer: open Task Manager → find Windows Explorer → Restart
+
+### Status says "Playing" but the desktop doesn't change
+
+Windows 11 24H2 and newer (including 26H2 Insider builds) use a "raised
+desktop": the wallpaper is a WorkerW child of Progman under a layered icon
+view. Intonaco v1.0.2+ detects this layout and places a layered player
+directly under the icons. If the desktop still doesn't change:
+
+- Make sure **desktop icons are shown** (right-click desktop → View → Show
+  desktop icons) — some early 24H2 builds hid live wallpapers otherwise
+- Attach `%LocalAppData%\Intonaco\debug.log` to an issue — it records the
+  detected desktop layout, Progman's child z-order and the placement checks
 
 ### "Failed to attach to desktop"
 

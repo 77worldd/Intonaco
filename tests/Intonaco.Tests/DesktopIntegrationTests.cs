@@ -80,5 +80,51 @@ namespace Intonaco.Tests
         {
             Assert.Empty(OrderCandidates(Array.Empty<WorkerWCandidate>()));
         }
+
+        [Fact]
+        public void Classify_NoRedirectionBitmap_IsRaisedEvenWithClassicWorkerW()
+        {
+            // A stale top-level WorkerW can exist on a raised desktop, but
+            // parenting there is invisible — raised must win.
+            var layout = ClassifyLayout(
+                progmanHasNoRedirectionBitmap: true,
+                defViewIsProgmanChild: true,
+                progmanHasFullScreenWorkerWChild: true,
+                classicWorkerWFound: true);
+            Assert.Equal(DesktopLayout.RaisedProgman, layout);
+        }
+
+        [Fact]
+        public void Classify_DefViewAndFullScreenWorkerWUnderProgman_IsRaised()
+        {
+            var layout = ClassifyLayout(
+                progmanHasNoRedirectionBitmap: false,
+                defViewIsProgmanChild: true,
+                progmanHasFullScreenWorkerWChild: true,
+                classicWorkerWFound: false);
+            Assert.Equal(DesktopLayout.RaisedProgman, layout);
+        }
+
+        [Fact]
+        public void Classify_ClassicWorkerWOnly_IsClassic()
+        {
+            var layout = ClassifyLayout(
+                progmanHasNoRedirectionBitmap: false,
+                defViewIsProgmanChild: false,
+                progmanHasFullScreenWorkerWChild: false,
+                classicWorkerWFound: true);
+            Assert.Equal(DesktopLayout.ClassicWorkerW, layout);
+        }
+
+        [Fact]
+        public void Classify_UnsplitDesktop_IsUnknown()
+        {
+            var layout = ClassifyLayout(
+                progmanHasNoRedirectionBitmap: false,
+                defViewIsProgmanChild: true,
+                progmanHasFullScreenWorkerWChild: false,
+                classicWorkerWFound: false);
+            Assert.Equal(DesktopLayout.Unknown, layout);
+        }
     }
 }
