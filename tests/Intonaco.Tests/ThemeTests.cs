@@ -71,7 +71,9 @@ namespace Intonaco.Tests
 
             try
             {
-                Assert.True(slider.ApplyTemplate());
+                // The hosted window has already applied the template during
+                // layout; ApplyTemplate therefore correctly returns false.
+                slider.ApplyTemplate();
                 var track = Assert.IsType<Track>(
                     slider.Template.FindName("PART_Track", slider));
 
@@ -102,7 +104,7 @@ namespace Intonaco.Tests
 
             try
             {
-                Assert.True(toggle.ApplyTemplate());
+                toggle.ApplyTemplate();
                 var track = Assert.IsType<Border>(
                     toggle.Template.FindName("Track", toggle));
                 var thumb = Assert.IsType<Border>(
