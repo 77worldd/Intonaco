@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using Intonaco.Core;
 using Xunit;
 
@@ -123,6 +124,8 @@ namespace Intonaco.Tests
                 Assert.True(player.IsSuspended);
                 Assert.False(player.HasActiveMediaPipeline);
                 Assert.NotNull(player.PausedFrame);
+                Assert.True(HasVisiblePixels(player.PausedFrame!),
+                    "The suspended wallpaper frame should contain the video, not a black capture.");
 
                 Task<bool> resumedOpen = WaitForMediaOpenedAsync(player);
                 player.Resume();
@@ -142,6 +145,31 @@ namespace Intonaco.Tests
                 player.Dispose();
                 window.Close();
             }
+        }
+
+        private static bool HasVisiblePixels(BitmapSource bitmap)
+        {
+            int stride = (bitmap.PixelWidth * bitmap.Format.BitsPerPixel + 7) / 8;
+            var pixels = new byte[stride * bitmap.PixelHeight];
+            bitmap.CopyPixels(pixels, stride, 0);
+
+            int bytesPerPixel = Math.Max(1, bitmap.Format.BitsPerPixel / 8);
+            for (int y = 0; y < bitmap.PixelHeight; y += 8)
+            {
+                int row = y * stride;
+                for (int x = 0; x < bitmap.PixelWidth; x += 8)
+                {
+                    int pixel = row + x * bytesPerPixel;
+                    if (pixels[pixel] > 20 ||
+                        pixels[pixel + 1] > 20 ||
+                        pixels[pixel + 2] > 20)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static string CreateSampleVideo()

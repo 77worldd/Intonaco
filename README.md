@@ -22,7 +22,8 @@ _Preview graphic rendered from the app's UI layout. Live screenshots are welcome
 - **Hardware-accelerated playback** — Uses Windows Media Foundation with DXVA2 hardware decoding
 - **Drag, drop and reuse** — Drop a video anywhere on the window, then bring favorites back from the recent-wallpaper list
 - **Personalized playback** — Fill/Fit/Stretch modes, 0.5×–1.5× speed, looping, volume and frame-rate controls
-- **Minimal footprint** — Single process, no background services, ~15–25 MB RAM during playback
+- **Minimal footprint** — Single process, no background services; pausing closes both video decoders and leaves one static frame, and the preview decoder stops whenever the main window is hidden
+- **Windows installer** — Optional per-user setup with Start Menu shortcut, optional desktop shortcut and clean uninstall; settings survive upgrades
 - **Fullscreen-aware** — Automatically pauses when games or fullscreen apps are running
 - **Power-aware** — Pauses on sleep, lock, and display-off events
 - **Explorer crash recovery** — Automatically reattaches after Explorer restarts
@@ -48,23 +49,38 @@ For best performance, use H.264 MP4 files at your screen resolution or lower.
 ## System Requirements
 
 - Windows 10 version 1903 or later / Windows 11
-- .NET 8.0 Runtime ([download](https://dotnet.microsoft.com/download/dotnet/8.0)) — only for the **framework-dependent** download; the **self-contained** download needs nothing
+- .NET 8.0 Runtime ([download](https://dotnet.microsoft.com/download/dotnet/8.0)) — only for the **framework-dependent** download; the **installer**, portable EXE and self-contained zip need nothing
 - Any GPU with DXVA2 support (integrated or discrete)
 
 ## Installation
 
-### Portable (recommended)
+### Installer (recommended)
 
-1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.2.0-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
-   - `Intonaco-v1.2.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites (≈60–80 MB)
-   - `Intonaco-v1.2.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
-2. Extract to any folder
-3. Run `Intonaco.exe`
+Download `Intonaco-v1.3.0-win-x64-setup.exe` from
+[Releases](https://github.com/77worldd/Intonaco/releases) and run it.
+The installer:
 
-Optionally verify your download against the `SHA256SUMS.txt` published with the release:
+- installs for the current Windows user, without administrator rights or
+  a separate .NET installation;
+- creates a Start Menu shortcut and offers an optional desktop shortcut;
+- can launch Intonaco when setup finishes;
+- appears in Windows Settings → Apps for normal uninstall;
+- preserves `%LocalAppData%\Intonaco` settings and logs during upgrades,
+  reinstalls and uninstall.
+
+### Portable
+
+If you prefer not to install, download the portable single file
+`Intonaco-v1.3.0-win-x64.exe` and run it directly. Zip alternatives are:
+
+- `Intonaco-v1.3.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites
+- `Intonaco-v1.3.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
+
+Optionally verify any download against the `SHA256SUMS.txt` published
+with the release:
 
 ```powershell
-Get-FileHash .\Intonaco-v1.2.0-win-x64-self-contained.zip -Algorithm SHA256
+Get-FileHash .\Intonaco-v1.3.0-win-x64-setup.exe -Algorithm SHA256
 ```
 
 ### Build from source
@@ -75,7 +91,15 @@ cd Intonaco
 .\build.ps1 -Publish
 ```
 
-The published executable will be in the `publish/` folder.
+The published portable executable will be in the `publish/` folder.
+To also build the Windows installer (requires Inno Setup 6, or
+Chocolatey to install it):
+
+```powershell
+.\build.ps1 -Installer
+```
+
+The setup executable is written to `release/`.
 
 Run the test suite with:
 
@@ -100,7 +124,7 @@ Videos you apply are kept under **Recent wallpapers** for one-click reuse.
 | Choose Video      | Select a video file as wallpaper              |
 | Drag & drop       | Drop a supported video anywhere on the window |
 | Recent wallpapers | Reapply one of your last six wallpapers       |
-| ▶ / ❚❚            | Play or pause the wallpaper                   |
+| ▶ / ❚❚            | Play, or pause to a static frame and release the decoder |
 | ■                 | Stop wallpaper and restore default desktop    |
 | Mute / volume     | Toggle or precisely adjust wallpaper audio    |
 | Open location     | Show the current video in File Explorer       |
@@ -124,28 +148,55 @@ Settings are stored in `%LocalAppData%\Intonaco\settings.json`. Run Intonaco wit
 
 ## Performance
 
-Intonaco is designed for minimal resource usage:
+Resource use depends strongly on the video's resolution/codec, display
+size, GPU driver and whether the settings window is visible, so v1.3.0
+does not repeat the old one-number RAM estimates. The important state
+guarantees are architectural:
 
-| State                  | RAM       | CPU   | GPU   |
-| ---------------------- | --------- | ----- | ----- |
-| Idle (tray)            | ~12 MB    | 0%    | 0%    |
-| Playing 1080p 30fps    | ~20–30 MB | 1–3%  | 2–5%  |
-| Paused                 | ~15 MB    | 0%    | 0%    |
-| Fullscreen app active  | ~15 MB    | <0.1% | 0%    |
+| State | Media work retained |
+| --- | --- |
+| Playing, settings window visible | Desktop decoder plus the separate live-preview decoder |
+| Playing, app hidden in tray | **Desktop decoder only** — the preview source is closed |
+| Paused | **No decoder** — one captured static frame; both desktop and preview pipelines are closed |
+| Fullscreen/system pause | Same suspended static-frame state as Pause |
+| Stopped/tray idle | No media source, paused frame or playback timers |
 
-Estimates based on Windows 11 23H2, Intel i7-12700K, integrated UHD 770. Actual
-values depend on video resolution, codec, and hardware. Community measurements
-are tracked in [docs/VERIFICATION.md](docs/VERIFICATION.md).
+Earlier versions only called `MediaElement.Pause()`, which retained the
+Media Foundation source/decoder and frame queues, and the preview had
+its own pipeline that was not synchronized with Pause or window
+visibility. v1.3.0 closes those pipelines instead. CPU/GPU video-decode
+activity should therefore fall to idle noise while paused, apart from
+the one static image already held by the desktop compositor.
+
+For a repeatable before/after sample on your own machine, play the same
+video and run the following once while playing, again after pausing for
+at least 10 seconds, and again with the app hidden in the tray:
+
+```powershell
+.\tools\Measure-IntonacoPerformance.ps1 -Label "Playing" -DurationSeconds 20
+.\tools\Measure-IntonacoPerformance.ps1 -Label "Paused"  -DurationSeconds 20
+```
+
+Intonaco also logs before/after process snapshots around its one-off
+paused-state collection to `%LocalAppData%\Intonaco\debug.log`. Compare
+**PrivateMemoryMB** as well as Task Manager working set: Windows may
+leave already-freed pages resident in the working set until memory
+pressure reclaims them. On-device checks are tracked in
+[docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ## Architecture
 
 ```text
 Intonaco.exe (single process)
 ├── WPF UI (MainWindow)
+│   └── Preview MediaElement → only while visible and playing; paused
+│       state reuses the desktop player's one static frame
 ├── PlayerWindow → classic WorkerW, or layered Progman child on raised desktops
-│   └── MediaElement → Windows Media Foundation → DXVA2
+│   ├── MediaElement → Windows Media Foundation → DXVA2
+│   └── Paused-frame Image → shown after the media source is closed
 ├── DesktopIntegration → layout detection, 0x052C split, verified placement
-├── FullscreenDetector → 2-second polling (low overhead)
+├── FullscreenDetector → 2-second polling only while playing or waiting
+│   to resume from a fullscreen pause
 └── SystemEventMonitor → sleep/wake/lock/display events
 ```
 
@@ -161,11 +212,18 @@ Intonaco.exe (single process)
 
 - Intonaco automatically reattaches. If it doesn't, right-click the tray icon and select **Play**
 
-### High CPU usage
+### High CPU/GPU usage
 
-- Lower the frame rate limit to 15 or 24 fps
+- Minimize Intonaco to the tray while playing; that closes the second
+  preview decoder and leaves only desktop playback running
+- Pause when you do not need motion; Pause now closes the desktop decoder
+  and keeps only a static frame
 - Use a lower-resolution video
-- Ensure hardware acceleration is working (use H.264 codec)
+- Ensure hardware acceleration is working (use the H.264 codec)
+
+> The frame-rate preference is persisted, but WPF `MediaElement` does
+> not expose a hard per-frame presentation cap; Intonaco does not claim
+> to throttle decoding on that path yet.
 
 ### Desktop icons missing
 
@@ -206,9 +264,13 @@ attach that file when opening an issue.
 | `dotnet build Intonaco.sln -c Release`                         | Builds app + tests                      |
 | `dotnet test Intonaco.sln -c Release`                          | Runs the xUnit test suite               |
 | `.\build.ps1 -Publish`                                         | Publishes `publish\Intonaco.exe`        |
+| `.\build.ps1 -Installer`                                       | Builds the Inno Setup installer in `release\` |
+| `.\tools\Measure-IntonacoPerformance.ps1`                      | Samples process RAM/CPU for a labelled state |
 | `python tools/generate-icon.py`                                | Rebuilds app icons and light/dark brand lockups from `docs/branding/` |
 
-Every push is built and tested on Windows by GitHub Actions
+Every push is built and tested on Windows by GitHub Actions, including
+the media-lifecycle tests and a silent installer install/launch/
+reinstall/uninstall smoke test
 ([.github/workflows/ci.yml](.github/workflows/ci.yml)); version tags (`v*`)
 additionally publish the official GitHub release
 ([.github/workflows/release.yml](.github/workflows/release.yml)).
