@@ -43,6 +43,27 @@ jobs:
           path: TestResults
           if-no-files-found: ignore
 
+      - name: Report failed tests
+        if: always()
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem -Path TestResults -Filter *.trx -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $trx) { return }
+
+          [xml]$doc = Get-Content -LiteralPath $trx.FullName
+          $ns = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
+          $ns.AddNamespace('t', 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010')
+          $failed = $doc.SelectNodes('//t:UnitTestResult[@outcome="Failed"]', $ns)
+
+          foreach ($result in $failed) {
+            $name = $result.GetAttribute('testName')
+            $message = $result.SelectSingleNode('t:Output/t:ErrorInfo/t:Message', $ns)?.InnerText
+            $stack = $result.SelectSingleNode('t:Output/t:ErrorInfo/t:StackTrace', $ns)?.InnerText
+            $detail = ("$message`n$stack" -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A')
+            Write-Host "::error title=Failed test: $name::$detail"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Failed test: $name`n`n``````text`n$message`n$stack`n``````"
+          }
+
       - name: Publish (framework-dependent, single file)
         run: >-
           dotnet publish src/Intonaco/Intonaco.csproj -c Release -r win-x64
