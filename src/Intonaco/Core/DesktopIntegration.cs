@@ -31,6 +31,11 @@ namespace Intonaco.Core
     /// z-ordered directly under SHELLDLL_DefView and above the system
     /// WorkerW: [SHELLDLL_DefView, player, WorkerW].
     ///
+    /// Diagnostics from a 26H2 machine exposed two extra requirements: a
+    /// raised Progman/DefView pair is not by itself a completed split (an
+    /// actual WorkerW layer must be requested), and WPF's HwndTarget
+    /// actively clears WS_EX_LAYERED unless the style change is guarded.
+    ///
     /// The layout is detected from the actual window tree and Progman's
     /// extended style — not from the OS version — and every attach attempt
     /// is logged to %LocalAppData%\Intonaco\debug.log.
@@ -80,6 +85,10 @@ namespace Intonaco.Core
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetLayeredWindowAttributes(IntPtr hWnd, out uint pcrKey,
+            out byte pbAlpha, out uint pdwFlags);
+
         [DllImport("user32.dll")]
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
@@ -101,7 +110,15 @@ namespace Intonaco.Core
             public int Left, Top, Right, Bottom;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct STYLESTRUCT
+        {
+            public uint styleOld;
+            public uint styleNew;
+        }
+
         private const uint SMTO_NORMAL = 0x0000;
+        private const int WM_STYLECHANGING = 0x007C;
         private const int GWL_STYLE = -16;
         private const int GWL_EXSTYLE = -20;
         private const long WS_POPUP = unchecked((long)0x80000000);
@@ -158,6 +175,28 @@ namespace Intonaco.Core
                 return DesktopLayout.ClassicWorkerW;
             return DesktopLayout.Unknown;
         }
+
+        /// <summary>
+        /// A raised Progman with SHELLDLL_DefView is only *capable* of the
+        /// raised layout; Explorer has not split the desktop until an actual
+        /// full-screen WorkerW wallpaper layer exists. Treating the raised
+        /// styles alone as proof of a split was the v1.0.2 failure on build
+        /// 26300.9711: no 0x052C request was sent, no WorkerW was created,
+        /// and DefView continued painting the static wallpaper over us.
+        /// </summary>
+        internal static bool HasWallpaperLayer(
+            bool classicWorkerWFound,
+            bool progmanHasFullScreenWorkerWChild)
+            => classicWorkerWFound || progmanHasFullScreenWorkerWChild;
+
+        /// <summary>
+        /// WPF's HwndTarget deliberately clears WS_EX_LAYERED from every
+        /// WM_STYLECHANGING notification while UsesPerPixelOpacity is false.
+        /// The desktop style guard reapplies this bit before the change is
+        /// committed, while keeping WPF's normal (non-per-pixel) renderer.
+        /// </summary>
+        internal static uint ForceLayeredExStyle(uint styleNew, bool keepLayered)
+            => keepLayered ? styleNew | (uint)WS_EX_LAYERED : styleNew;
 
         internal enum WorkerWStrategy
         {
@@ -222,10 +261,9 @@ namespace Intonaco.Core
                 ProgmanWorkerChild != IntPtr.Zero,
                 ClassicWorkerW != IntPtr.Zero);
 
-            public bool HasDesktopSplit =>
-                ClassicWorkerW != IntPtr.Zero ||
-                ProgmanWorkerChild != IntPtr.Zero ||
-                (IsRaisedByExStyle && ProgmanDefView != IntPtr.Zero);
+            public bool HasDesktopSplit => HasWallpaperLayer(
+                ClassicWorkerW != IntPtr.Zero,
+                ProgmanWorkerChild != IntPtr.Zero);
         }
 
         // _parentHandle is the window the player is actually parented to
@@ -236,6 +274,9 @@ namespace Intonaco.Core
         private IntPtr _shellDefView = IntPtr.Zero;
         private IntPtr _systemWorkerW = IntPtr.Zero;
         private Window? _playerWindow;
+        private HwndSource? _playerHwndSource;
+        private HwndSourceHook? _layeredStyleHook;
+        private bool _keepLayeredStyle;
         private bool _disposed;
         private bool _isAttached;
         private bool _isRaisedDesktop;
@@ -298,15 +339,24 @@ namespace Intonaco.Core
             GC.KeepAlive(callback);
             snapshot.TopLevels = topLevels;
 
+            long primaryArea = (long)GetSystemMetrics(SM_CXSCREEN) * GetSystemMetrics(SM_CYSCREEN);
+
             // Classic arrangement: a top-level host contains SHELLDLL_DefView
             // and the wallpaper WorkerW is the next top-level WorkerW after it.
+            // Count it as a wallpaper layer only when it actually covers the
+            // display; Explorer owns many tiny WorkerW helper windows.
             foreach (var (handle, _) in topLevels)
             {
                 IntPtr defView = FindWindowEx(handle, IntPtr.Zero, "SHELLDLL_DefView", null);
                 if (defView != IntPtr.Zero)
                 {
                     snapshot.DefView = defView;
-                    snapshot.ClassicWorkerW = FindWindowEx(IntPtr.Zero, handle, "WorkerW", null);
+                    IntPtr classicWorker = FindWindowEx(IntPtr.Zero, handle, "WorkerW", null);
+                    if (classicWorker != IntPtr.Zero && primaryArea > 0 &&
+                        GetWindowArea(classicWorker) >= primaryArea * 9 / 10)
+                    {
+                        snapshot.ClassicWorkerW = classicWorker;
+                    }
                 }
             }
 
@@ -317,7 +367,6 @@ namespace Intonaco.Core
             // Direct WorkerW children of Progman. Explorer keeps several tiny
             // ones (tray/input helpers); the wallpaper layer is the one that
             // covers the primary display.
-            long primaryArea = (long)GetSystemMetrics(SM_CXSCREEN) * GetSystemMetrics(SM_CYSCREEN);
             IntPtr child = IntPtr.Zero;
             IntPtr largestChild = IntPtr.Zero;
             long largestArea = -1;
@@ -331,43 +380,88 @@ namespace Intonaco.Core
                 }
             }
             snapshot.AnyProgmanWorkerChild = largestChild;
-            if (largestArea >= primaryArea * 9 / 10)
+            if (primaryArea > 0 && largestArea >= primaryArea * 9 / 10)
                 snapshot.ProgmanWorkerChild = largestChild;
 
             return snapshot;
         }
 
         /// <summary>
-        /// Asks Explorer to create the wallpaper layer, but only when the
-        /// window tree shows it does not exist yet. The 0x052C split request
-        /// is (0xD, 1) on every current build; older variants can *undo* a
-        /// layer that was just created, so they are never spammed — the
-        /// legacy (0, 0) form is tried once only if (0xD, 1) made nothing.
+        /// Asks Explorer to create the wallpaper layer when the window tree
+        /// shows no actual WorkerW layer yet. This includes a raised desktop
+        /// whose DefView is already under Progman: that arrangement alone is
+        /// not a completed split. The current request is a single
+        /// 0x052C (0xD, 1); variants with lParam 0 can release/undo the layer,
+        /// so a legacy (0, 0) request is used only on non-raised layouts and
+        /// only after (0xD, 1) demonstrably made nothing.
         /// </summary>
         private DesktopSnapshot EnsureDesktopSplit(DesktopSnapshot snapshot)
         {
             if (snapshot.Progman == IntPtr.Zero || snapshot.HasDesktopSplit)
                 return snapshot;
 
-            DebugLog.Write("No wallpaper layer in window tree; sending 0x052C (0xD, 1) to Progman.");
-            SendMessageTimeout(snapshot.Progman, 0x052C, new IntPtr(0xD), new IntPtr(1),
-                SMTO_NORMAL, 1000, out _);
-            Thread.Sleep(250);
-            snapshot = CaptureDesktopState();
+            DebugLog.Write(
+                "No actual WorkerW wallpaper layer in window tree " +
+                $"(Layout={snapshot.Layout}); sending 0x052C (0xD, 1) to Progman.");
+            SendDesktopSplitRequest(snapshot.Progman, new IntPtr(0xD), new IntPtr(1), "(0xD, 1)");
+            snapshot = WaitForWallpaperLayer(2000);
             if (snapshot.HasDesktopSplit)
                 return snapshot;
 
+            if (snapshot.Layout == DesktopLayout.RaisedProgman)
+            {
+                DebugLog.Write(
+                    "Raised desktop still has no full-screen WorkerW after 0x052C (0xD, 1); " +
+                    "proceeding with the verified layered-Progman placement and " +
+                    "not sending an lParam=0 variant that can release the split.");
+                return snapshot;
+            }
+
             DebugLog.Write("Still no wallpaper layer; trying legacy 0x052C (0, 0) once.");
-            SendMessageTimeout(snapshot.Progman, 0x052C, IntPtr.Zero, IntPtr.Zero,
-                SMTO_NORMAL, 1000, out _);
-            Thread.Sleep(250);
-            return CaptureDesktopState();
+            SendDesktopSplitRequest(snapshot.Progman, IntPtr.Zero, IntPtr.Zero, "(0, 0)");
+            return WaitForWallpaperLayer(1000);
+        }
+
+        private DesktopSnapshot WaitForWallpaperLayer(int timeoutMs)
+        {
+            const int pollMs = 50;
+            int elapsedMs = 0;
+            DesktopSnapshot snapshot = CaptureDesktopState();
+
+            while (!snapshot.HasDesktopSplit && elapsedMs < timeoutMs)
+            {
+                Thread.Sleep(pollMs);
+                elapsedMs += pollMs;
+                snapshot = CaptureDesktopState();
+            }
+
+            if (snapshot.HasDesktopSplit)
+            {
+                DebugLog.Write(
+                    $"WorkerW wallpaper layer appeared after ~{elapsedMs} ms: " +
+                    $"ClassicWorkerW=0x{snapshot.ClassicWorkerW.ToInt64():X} " +
+                    $"ProgmanWorkerChild=0x{snapshot.ProgmanWorkerChild.ToInt64():X}.");
+            }
+
+            return snapshot;
+        }
+
+        private static void SendDesktopSplitRequest(
+            IntPtr progman, IntPtr wParam, IntPtr lParam, string label)
+        {
+            IntPtr callResult = SendMessageTimeout(
+                progman, 0x052C, wParam, lParam, SMTO_NORMAL, 1000, out IntPtr messageResult);
+            int win32Error = callResult == IntPtr.Zero ? Marshal.GetLastWin32Error() : 0;
+            DebugLog.Write(
+                $"0x052C {label}: SendMessageTimeout returned 0x{callResult.ToInt64():X}, " +
+                $"message result 0x{messageResult.ToInt64():X}, win32 error = {win32Error}.");
         }
 
         private static void LogSnapshot(DesktopSnapshot snapshot)
         {
             DebugLog.Write(
                 $"Desktop state: OS={Environment.OSVersion.Version} Layout={snapshot.Layout} " +
+                $"HasWallpaperLayer={snapshot.HasDesktopSplit} " +
                 $"Progman=0x{snapshot.Progman.ToInt64():X} NoRedirectionBitmap={snapshot.IsRaisedByExStyle} " +
                 $"DefView=0x{snapshot.DefView.ToInt64():X} ProgmanDefView=0x{snapshot.ProgmanDefView.ToInt64():X} " +
                 $"ClassicWorkerW=0x{snapshot.ClassicWorkerW.ToInt64():X} " +
@@ -528,8 +622,16 @@ namespace Intonaco.Core
             {
                 // WS_EX_LAYERED must be in place BEFORE SetParent (some
                 // renderers ignore it afterwards), with constant alpha so
-                // DirectX/WPF presents stay hardware accelerated.
-                SetLayeredOpaque(true);
+                // DirectX/WPF presents stay hardware accelerated. WPF would
+                // otherwise remove the bit in its WM_STYLECHANGING handler;
+                // SetLayeredOpaque installs a guard before changing it.
+                if (!SetLayeredOpaque(true))
+                {
+                    DebugLog.Write(
+                        "Could not verify WS_EX_LAYERED + alpha 255 before SetParent; " +
+                        "the raised placement will retry after parenting and must " +
+                        "verify it before it can report success.");
+                }
                 if (TryAttachRaised(snapshot))
                     return true;
 
@@ -569,6 +671,9 @@ namespace Intonaco.Core
             EnsureSystemWorkerWBelowPlayer();
             ResizeToDesktop();
             ShowWindow(_playerHandle, SW_SHOW);
+            // A final no-op when the pre-parent call stuck; otherwise this
+            // restores the required layered state after SetParent/SetWindowPos.
+            SetLayeredOpaque(true);
 
             if (!VerifyPlayerPlacement())
             {
@@ -576,6 +681,7 @@ namespace Intonaco.Core
                 EnsureSystemWorkerWBelowPlayer();
                 ResizeToDesktop();
                 ShowWindow(_playerHandle, SW_SHOW);
+                SetLayeredOpaque(true);
             }
 
             bool placed = VerifyPlayerPlacement();
@@ -649,8 +755,11 @@ namespace Intonaco.Core
 
         /// <summary>
         /// Parented-and-playing is not enough: the player HWND must be
-        /// visible and actually cover its parent's rect. (v1.0.1 reported
-        /// "Playing" while composited nowhere visible.)
+        /// visible and actually cover its parent's rect. On a raised desktop
+        /// it must additionally still be an opaque WS_EX_LAYERED window,
+        /// sit directly under SHELLDLL_DefView, and not have Explorer's
+        /// full-screen WorkerW above it. (v1.0.2 reported success with the
+        /// layered bit missing, so its correct parent/rect were invisible.)
         /// </summary>
         private bool VerifyPlayerPlacement()
         {
@@ -666,7 +775,38 @@ namespace Intonaco.Core
 
             long parentArea = (long)(parentRect.Right - parentRect.Left) * (parentRect.Bottom - parentRect.Top);
             long playerArea = (long)(playerRect.Right - playerRect.Left) * (playerRect.Bottom - playerRect.Top);
-            return parentArea > 0 && playerArea >= parentArea * 9 / 10;
+            if (parentArea <= 0 || playerArea < parentArea * 9 / 10)
+                return false;
+
+            if (_isRaisedDesktop && IsProgmanParent)
+            {
+                if (!HasOpaqueLayeredStyle())
+                    return false;
+
+                var children = GetDirectChildren(_parentHandle);
+                int playerIndex = children.IndexOf(_playerHandle);
+                if (playerIndex < 0)
+                    return false;
+
+                if (_shellDefView != IntPtr.Zero && IsWindow(_shellDefView))
+                {
+                    int defViewIndex = children.IndexOf(_shellDefView);
+                    if (defViewIndex < 0 || playerIndex != defViewIndex + 1)
+                        return false;
+                }
+
+                if (_systemWorkerW != IntPtr.Zero && IsWindow(_systemWorkerW))
+                {
+                    int workerIndex = children.IndexOf(_systemWorkerW);
+                    if (workerIndex >= 0 && workerIndex < playerIndex &&
+                        GetWindowArea(_systemWorkerW) >= parentArea * 9 / 10)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
 
         private void LogPlayerState(string label)
@@ -675,11 +815,15 @@ namespace Intonaco.Core
             GetWindowRect(_playerHandle, out RECT rect);
             long style = GetWindowLongPtr(_playerHandle, GWL_STYLE).ToInt64();
             long exStyle = GetWindowLongPtr(_playerHandle, GWL_EXSTYLE).ToInt64();
+            string layeredAttributes = TryGetLayeredAttributes(out byte alpha, out uint flags)
+                ? $"alpha={alpha} flags=0x{flags:X}"
+                : "alpha=<unreadable>";
             DebugLog.Write(
                 $"{label}: player=0x{_playerHandle.ToInt64():X} parent=0x{GetParent(_playerHandle).ToInt64():X} " +
                 $"({GetClassNameString(GetParent(_playerHandle))}) visible={IsWindowVisible(_playerHandle)} " +
                 $"rect=({rect.Left},{rect.Top})-({rect.Right},{rect.Bottom}) style=0x{style:X} exStyle=0x{exStyle:X} " +
-                $"layered={(exStyle & WS_EX_LAYERED) != 0} raised={_isRaisedDesktop}");
+                $"layered={(exStyle & WS_EX_LAYERED) != 0} {layeredAttributes} " +
+                $"layeredGuard={_keepLayeredStyle} raised={_isRaisedDesktop}");
         }
 
         private void ApplyFrameChanged()
@@ -689,30 +833,164 @@ namespace Intonaco.Core
         }
 
         /// <summary>
-        /// Adds/removes WS_EX_LAYERED with constant alpha 255. Constant-alpha
-        /// layered windows keep hardware-accelerated presents (unlike
-        /// per-pixel-alpha UpdateLayeredWindow windows).
+        /// Installs the hook that keeps WPF from undoing the raised-desktop
+        /// layered style. HwndSource public hooks run before WPF's
+        /// HwndTarget hook. For GWL_EXSTYLE changes we put WS_EX_LAYERED
+        /// back into STYLESTRUCT.styleNew and mark the notification handled,
+        /// so HwndTarget does not clear it again. This deliberately keeps
+        /// AllowsTransparency/UsesPerPixelOpacity false: the window uses
+        /// Win32 constant-alpha layering, not WPF's UpdateLayeredWindow path.
+        /// </summary>
+        private void InstallLayeredStyleGuard()
+        {
+            if (_playerHandle == IntPtr.Zero ||
+                (_playerHwndSource != null && _layeredStyleHook != null))
+            {
+                return;
+            }
+
+            try
+            {
+                _playerHwndSource = HwndSource.FromHwnd(_playerHandle);
+                if (_playerHwndSource == null)
+                {
+                    DebugLog.Write("Layered style guard: no HwndSource for the player HWND.");
+                    return;
+                }
+
+                _layeredStyleHook = LayeredStyleHook;
+                _playerHwndSource.AddHook(_layeredStyleHook);
+                DebugLog.Write("Layered style guard installed for the player HWND.");
+            }
+            catch (Exception ex)
+            {
+                _playerHwndSource = null;
+                _layeredStyleHook = null;
+                DebugLog.Write($"Layered style guard could not be installed: {ex.Message}");
+            }
+        }
+
+        private void RemoveLayeredStyleGuard()
+        {
+            _keepLayeredStyle = false;
+
+            HwndSource? source = _playerHwndSource;
+            HwndSourceHook? hook = _layeredStyleHook;
+            _playerHwndSource = null;
+            _layeredStyleHook = null;
+
+            if (source == null || hook == null)
+                return;
+
+            try
+            {
+                source.RemoveHook(hook);
+            }
+            catch
+            {
+                // The HWND/source may already have been destroyed with the
+                // old Explorer desktop windows. There is nothing to undo.
+            }
+        }
+
+        private IntPtr LayeredStyleHook(
+            IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (!_keepLayeredStyle || hwnd != _playerHandle ||
+                msg != WM_STYLECHANGING || wParam.ToInt64() != GWL_EXSTYLE ||
+                lParam == IntPtr.Zero)
+            {
+                return IntPtr.Zero;
+            }
+
+            STYLESTRUCT style = Marshal.PtrToStructure<STYLESTRUCT>(lParam);
+            style.styleNew = ForceLayeredExStyle(style.styleNew, keepLayered: true);
+            Marshal.StructureToPtr(style, lParam, fDeleteOld: false);
+
+            // Returning without handled=true would let HwndTarget process the
+            // same WM_STYLECHANGING next and clear the bit we just restored.
+            handled = true;
+            return IntPtr.Zero;
+        }
+
+        private bool TryGetLayeredAttributes(out byte alpha, out uint flags)
+        {
+            alpha = 0;
+            flags = 0;
+            return _playerHandle != IntPtr.Zero && IsWindow(_playerHandle) &&
+                   GetLayeredWindowAttributes(_playerHandle, out _, out alpha, out flags);
+        }
+
+        private bool HasOpaqueLayeredStyle()
+        {
+            if (_playerHandle == IntPtr.Zero || !IsWindow(_playerHandle))
+                return false;
+
+            long exStyle = GetWindowLongPtr(_playerHandle, GWL_EXSTYLE).ToInt64();
+            return (exStyle & WS_EX_LAYERED) != 0 &&
+                   TryGetLayeredAttributes(out byte alpha, out uint flags) &&
+                   alpha == 0xFF && (flags & LWA_ALPHA) != 0;
+        }
+
+        /// <summary>
+        /// Adds/removes WS_EX_LAYERED with constant alpha 255 and verifies
+        /// the result by reading it back. Constant-alpha layered windows keep
+        /// hardware-accelerated presents (unlike per-pixel-alpha
+        /// UpdateLayeredWindow windows). No SWP_FRAMECHANGED is sent here:
+        /// the style guard above is what makes the bit survive WPF.
         /// </summary>
         private bool SetLayeredOpaque(bool enabled)
         {
             if (_playerHandle == IntPtr.Zero) return false;
 
+            if (enabled)
+            {
+                InstallLayeredStyleGuard();
+                _keepLayeredStyle = true;
+                if (HasOpaqueLayeredStyle())
+                    return true;
+            }
+            else
+            {
+                // Let the clearing SetWindowLongPtr below pass through the
+                // still-installed hook as a no-op, then remove the hook.
+                _keepLayeredStyle = false;
+            }
+
             long exStyle = GetWindowLongPtr(_playerHandle, GWL_EXSTYLE).ToInt64();
             long newExStyle = enabled ? exStyle | WS_EX_LAYERED : exStyle & ~WS_EX_LAYERED;
             if (newExStyle != exStyle)
             {
-                SetWindowLongPtr(_playerHandle, GWL_EXSTYLE, new IntPtr(newExStyle));
-                ApplyFrameChanged();
+                IntPtr previous = SetWindowLongPtr(
+                    _playerHandle, GWL_EXSTYLE, new IntPtr(newExStyle));
+                int setError = previous == IntPtr.Zero ? Marshal.GetLastWin32Error() : 0;
+                long after = GetWindowLongPtr(_playerHandle, GWL_EXSTYLE).ToInt64();
+                DebugLog.Write(
+                    $"SetLayeredOpaque({enabled}): exStyle 0x{exStyle:X} -> desired 0x{newExStyle:X}; " +
+                    $"readback 0x{after:X}; SetWindowLongPtr previous=0x{previous.ToInt64():X}, " +
+                    $"win32 error = {setError}.");
             }
 
             if (!enabled)
-                return true;
+            {
+                bool cleared =
+                    (GetWindowLongPtr(_playerHandle, GWL_EXSTYLE).ToInt64() & WS_EX_LAYERED) == 0;
+                RemoveLayeredStyleGuard();
+                return cleared;
+            }
 
             bool ok = SetLayeredWindowAttributes(_playerHandle, 0, 0xFF, LWA_ALPHA);
+            int attributesError = ok ? 0 : Marshal.GetLastWin32Error();
+            bool readBack = TryGetLayeredAttributes(out byte alpha, out uint flags);
+            long finalExStyle = GetWindowLongPtr(_playerHandle, GWL_EXSTYLE).ToInt64();
+            bool verified = ok && (finalExStyle & WS_EX_LAYERED) != 0 && readBack &&
+                            alpha == 0xFF && (flags & LWA_ALPHA) != 0;
             DebugLog.Write(
                 $"SetLayeredOpaque(true): SetLayeredWindowAttributes -> {ok}, " +
-                $"win32 error = {Marshal.GetLastWin32Error()}, exStyle now 0x{GetWindowLongPtr(_playerHandle, GWL_EXSTYLE).ToInt64():X}");
-            return ok;
+                $"win32 error = {attributesError}, exStyle now 0x{finalExStyle:X}, " +
+                $"GetLayeredWindowAttributes -> {readBack}, alpha={alpha}, flags=0x{flags:X}, " +
+                $"verified={verified}.");
+            return verified;
         }
 
         /// <summary>
@@ -814,9 +1092,13 @@ namespace Intonaco.Core
 
             if (needsRepair)
             {
-                DebugLog.Write("EnsurePlacement: desktop placement drifted; re-asserting size and z-order.");
+                DebugLog.Write(
+                    "EnsurePlacement: desktop placement or layered state drifted; " +
+                    "re-asserting size, z-order and raised-desktop layering.");
                 ResizeToDesktop();
                 ShowWindow(_playerHandle, SW_SHOW);
+                if (_isRaisedDesktop && IsProgmanParent)
+                    SetLayeredOpaque(true);
             }
         }
 
@@ -833,7 +1115,10 @@ namespace Intonaco.Core
                 GetParent(_playerHandle) == _parentHandle)
             {
                 ResizeToDesktop();
-                return true;
+                ShowWindow(_playerHandle, SW_SHOW);
+                if (_isRaisedDesktop && IsProgmanParent)
+                    SetLayeredOpaque(true);
+                return VerifyPlayerPlacement();
             }
 
             return Attach(_playerWindow);
@@ -846,6 +1131,8 @@ namespace Intonaco.Core
         /// </summary>
         public void Detach()
         {
+            RemoveLayeredStyleGuard();
+
             if (_playerHandle != IntPtr.Zero && IsWindow(_playerHandle))
             {
                 SetParent(_playerHandle, IntPtr.Zero);
