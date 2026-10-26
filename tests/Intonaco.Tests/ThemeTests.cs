@@ -1,7 +1,11 @@
 using System;
+using System.Collections;
+using System.Linq;
+using System.Resources;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using Intonaco.Views;
 using Xunit;
 
 namespace Intonaco.Tests
@@ -18,27 +22,51 @@ namespace Intonaco.Tests
             };
         }
 
+        private static Window Host(FrameworkElement element)
+        {
+            var window = new Window
+            {
+                Content = element,
+                Width = 360,
+                Height = 140,
+                ShowInTaskbar = false,
+                WindowStyle = WindowStyle.None
+            };
+
+            window.Show();
+            window.UpdateLayout();
+            return window;
+        }
+
         [WpfFact]
         public void SliderStyle_AppliesNativeTemplateAndBehavior()
         {
             var theme = LoadTheme();
             var style = Assert.IsType<Style>(theme["IntonacoSlider"]);
             var slider = new Slider { Style = style, Width = 240 };
+            var window = Host(slider);
 
-            Assert.True(slider.ApplyTemplate());
-            var track = Assert.IsType<Track>(
-                slider.Template.FindName("PART_Track", slider));
+            try
+            {
+                Assert.True(slider.ApplyTemplate());
+                var track = Assert.IsType<Track>(
+                    slider.Template.FindName("PART_Track", slider));
 
-            Assert.NotNull(track.DecreaseRepeatButton);
-            Assert.NotNull(track.IncreaseRepeatButton);
-            Assert.NotNull(track.Thumb);
-            Assert.Equal(22, track.Thumb.Width);
-            Assert.Equal(22, track.Thumb.Height);
-            Assert.Equal(32, slider.Height);
-            Assert.True(slider.IsMoveToPointEnabled);
-            Assert.True(slider.IsSnapToTickEnabled);
-            Assert.Equal(1, slider.SmallChange);
-            Assert.Equal(10, slider.LargeChange);
+                Assert.NotNull(track.DecreaseRepeatButton);
+                Assert.NotNull(track.IncreaseRepeatButton);
+                Assert.NotNull(track.Thumb);
+                Assert.Equal(22, track.Thumb.Width);
+                Assert.Equal(22, track.Thumb.Height);
+                Assert.Equal(32, slider.Height);
+                Assert.True(slider.IsMoveToPointEnabled);
+                Assert.True(slider.IsSnapToTickEnabled);
+                Assert.Equal(1, slider.SmallChange);
+                Assert.Equal(10, slider.LargeChange);
+            }
+            finally
+            {
+                window.Close();
+            }
         }
 
         [WpfFact]
@@ -46,36 +74,45 @@ namespace Intonaco.Tests
         {
             var theme = LoadTheme();
             var style = Assert.IsType<Style>(theme["IntonacoToggle"]);
-            var toggle = new CheckBox { Style = style, Content = "Setting" };
+            var toggle = new CheckBox { Style = style, Content = "Setting", Width = 300 };
+            var window = Host(toggle);
 
-            Assert.True(toggle.ApplyTemplate());
-            var track = Assert.IsType<Border>(
-                toggle.Template.FindName("Track", toggle));
-            var thumb = Assert.IsType<Border>(
-                toggle.Template.FindName("Thumb", toggle));
-            var switchGrid = Assert.IsType<Grid>(track.Parent);
+            try
+            {
+                Assert.True(toggle.ApplyTemplate());
+                var track = Assert.IsType<Border>(
+                    toggle.Template.FindName("Track", toggle));
+                var thumb = Assert.IsType<Border>(
+                    toggle.Template.FindName("Thumb", toggle));
+                var switchGrid = Assert.IsType<Grid>(track.Parent);
 
-            Assert.Equal(40, switchGrid.Width);
-            Assert.Equal(20, switchGrid.Height);
-            Assert.Equal(12, thumb.Width);
-            Assert.Equal(12, thumb.Height);
+                Assert.Equal(40, switchGrid.Width);
+                Assert.Equal(20, switchGrid.Height);
+                Assert.Equal(12, thumb.Width);
+                Assert.Equal(12, thumb.Height);
+            }
+            finally
+            {
+                window.Close();
+            }
         }
 
-        [WpfTheory]
+        [Theory]
         [InlineData("intonaco.ico")]
         [InlineData("intonaco-mark-light.png")]
         [InlineData("intonaco-mark-dark.png")]
         public void BrandAssets_AreEmbedded(string fileName)
         {
-            var uri = new Uri(
-                $"pack://application:,,,/Intonaco;component/Assets/{fileName}",
-                UriKind.Absolute);
+            var assembly = typeof(MainWindow).Assembly;
+            using var stream = assembly.GetManifestResourceStream("Intonaco.g.resources");
+            Assert.NotNull(stream);
 
-            var info = Application.GetResourceStream(uri);
+            using var reader = new ResourceReader(stream);
+            var keys = reader.Cast<DictionaryEntry>()
+                .Select(entry => entry.Key.ToString())
+                .ToList();
 
-            Assert.NotNull(info);
-            using var stream = info.Stream;
-            Assert.True(stream.Length > 0);
+            Assert.Contains($"assets/{fileName.ToLowerInvariant()}", keys);
         }
     }
 }
