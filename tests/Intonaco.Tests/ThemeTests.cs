@@ -25,6 +25,18 @@ namespace Intonaco.Tests
                 PackUriHelper.UriSchemePack,
                 new PackWebRequestFactory());
 
+            // Application's static initialization registers WPF's internal
+            // "application" request factory used to resolve component URIs.
+            // Keep it alive across tests; closing a hosted test window must
+            // not shut down the shared dispatcher.
+            if (Application.Current == null)
+            {
+                _ = new Application
+                {
+                    ShutdownMode = ShutdownMode.OnExplicitShutdown
+                };
+            }
+
             return new ResourceDictionary
             {
                 Source = new Uri(
