@@ -77,14 +77,17 @@ Write-Host "Building installer with $iscc"
 Write-Host "  Payload: $publishPath"
 Write-Host "  Version: $Version"
 
-& $iscc `
+$compilerOutput = & $iscc `
     "/DPublishDir=$publishPath" `
     "/DMyAppVersion=$Version" `
     "/DOutputDir=$outputPath" `
-    $scriptPath | Out-Host
+    $scriptPath 2>&1
+$compilerExitCode = $LASTEXITCODE
+$compilerOutput | Out-Host
 
-if ($LASTEXITCODE -ne 0) {
-    throw "Inno Setup compilation failed with exit code $LASTEXITCODE."
+if ($compilerExitCode -ne 0) {
+    $detail = ($compilerOutput | Out-String).Trim()
+    throw "Inno Setup compilation failed with exit code $compilerExitCode.`n$detail"
 }
 
 $setupPath = Join-Path $outputPath "Intonaco-v$Version-win-x64-setup.exe"
