@@ -5,6 +5,7 @@ using System.Resources;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using Intonaco.Views;
 using Xunit;
 
@@ -84,7 +85,7 @@ namespace Intonaco.Tests
                     toggle.Template.FindName("Track", toggle));
                 var thumb = Assert.IsType<Border>(
                     toggle.Template.FindName("Thumb", toggle));
-                var switchGrid = Assert.IsType<Grid>(track.Parent);
+                var switchGrid = Assert.IsType<Grid>(VisualTreeHelper.GetParent(track));
 
                 Assert.Equal(40, switchGrid.Width);
                 Assert.Equal(20, switchGrid.Height);
