@@ -176,7 +176,6 @@ namespace Intonaco.Core
 
             _currentSource = null;
             _isPaused = false;
-            _isLoaded = false;
             Duration = TimeSpan.Zero;
             SetState(PlaybackState.Stopped);
         }
