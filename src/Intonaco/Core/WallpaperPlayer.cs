@@ -20,6 +20,9 @@ namespace Intonaco.Core
         private bool _isMuted;
         private double _volume = 0.0; // Default muted for wallpaper
         private int _targetFps = 30;
+        private Stretch _stretchMode = Stretch.UniformToFill;
+        private double _playbackSpeed = 1.0;
+        private bool _loopPlayback = true;
 
         public event Action<string>? ErrorOccurred;
         public event Action<PlaybackState>? StateChanged;
@@ -53,7 +56,39 @@ namespace Intonaco.Core
             set => _targetFps = Math.Clamp(value, 1, 60);
         }
 
+        public Stretch StretchMode
+        {
+            get => _stretchMode;
+            set
+            {
+                _stretchMode = value;
+                if (_mediaElement != null)
+                    _mediaElement.Stretch = value;
+            }
+        }
+
+        public double PlaybackSpeed
+        {
+            get => _playbackSpeed;
+            set
+            {
+                _playbackSpeed = double.IsNaN(value) || double.IsInfinity(value)
+                    ? 1.0
+                    : Math.Clamp(value, 0.25, 2.0);
+                if (_mediaElement != null)
+                    _mediaElement.SpeedRatio = _playbackSpeed;
+            }
+        }
+
+        public bool LoopPlayback
+        {
+            get => _loopPlayback;
+            set => _loopPlayback = value;
+        }
+
         public TimeSpan Duration { get; private set; }
+        public int NaturalVideoWidth { get; private set; }
+        public int NaturalVideoHeight { get; private set; }
         public string? CurrentFilePath => _currentSource?.LocalPath;
 
         /// <summary>
@@ -73,7 +108,8 @@ namespace Intonaco.Core
             {
                 LoadedBehavior = MediaState.Manual,
                 UnloadedBehavior = MediaState.Manual,
-                Stretch = Stretch.UniformToFill,
+                Stretch = _stretchMode,
+                SpeedRatio = _playbackSpeed,
                 Volume = _volume,
                 IsMuted = true, // Wallpapers should be silent by default
                 IsHitTestVisible = false
@@ -106,6 +142,8 @@ namespace Intonaco.Core
 
                 _currentSource = new Uri(filePath, UriKind.Absolute);
                 _mediaElement.Source = _currentSource;
+                _mediaElement.Stretch = _stretchMode;
+                _mediaElement.SpeedRatio = _playbackSpeed;
                 _mediaElement.IsMuted = _isMuted;
                 _mediaElement.Volume = _volume;
                 _mediaElement.Play();
@@ -149,6 +187,14 @@ namespace Intonaco.Core
 
             try
             {
+                // Resuming after a non-looping video ended should restart it
+                // instead of leaving the final frame stuck at the end.
+                if (Duration > TimeSpan.Zero &&
+                    _mediaElement.Position >= Duration - TimeSpan.FromMilliseconds(250))
+                {
+                    _mediaElement.Position = TimeSpan.Zero;
+                }
+                _mediaElement.SpeedRatio = _playbackSpeed;
                 _mediaElement.Play();
                 _isPaused = false;
                 SetState(PlaybackState.Playing);
@@ -177,6 +223,8 @@ namespace Intonaco.Core
             _currentSource = null;
             _isPaused = false;
             Duration = TimeSpan.Zero;
+            NaturalVideoWidth = 0;
+            NaturalVideoHeight = 0;
             SetState(PlaybackState.Stopped);
         }
 
@@ -200,17 +248,28 @@ namespace Intonaco.Core
             Duration = _mediaElement.NaturalDuration.HasTimeSpan
                 ? _mediaElement.NaturalDuration.TimeSpan
                 : TimeSpan.Zero;
+            NaturalVideoWidth = _mediaElement.NaturalVideoWidth;
+            NaturalVideoHeight = _mediaElement.NaturalVideoHeight;
             MediaOpened?.Invoke(Duration);
         }
 
         private void OnMediaEnded(object? sender, RoutedEventArgs e)
         {
-            // Loop the video
-            if (_mediaElement != null && !_disposed && !_isPaused)
+            if (_mediaElement == null || _disposed || _isPaused)
+                return;
+
+            if (_loopPlayback)
             {
                 _mediaElement.Position = TimeSpan.Zero;
+                _mediaElement.SpeedRatio = _playbackSpeed;
                 _mediaElement.Play();
+                return;
             }
+
+            // Keep the last frame on the desktop rather than replacing it
+            // with black; Resume knows to rewind from the end.
+            _isPaused = true;
+            SetState(PlaybackState.Paused);
         }
 
         private void OnMediaFailed(object? sender, ExceptionRoutedEventArgs e)

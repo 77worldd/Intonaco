@@ -17,12 +17,14 @@ _Preview graphic rendered from the app's UI layout. Live screenshots are welcome
 
 - **Real desktop integration** — Video plays behind desktop icons using the native Windows desktop layer
 - **Hardware-accelerated playback** — Uses Windows Media Foundation with DXVA2 hardware decoding
+- **Drag, drop and reuse** — Drop a video anywhere on the window, then bring favorites back from the recent-wallpaper list
+- **Personalized playback** — Fill/Fit/Stretch modes, 0.5×–1.5× speed, looping, volume and frame-rate controls
 - **Minimal footprint** — Single process, no background services, ~15–25 MB RAM during playback
 - **Fullscreen-aware** — Automatically pauses when games or fullscreen apps are running
 - **Power-aware** — Pauses on sleep, lock, and display-off events
 - **Explorer crash recovery** — Automatically reattaches after Explorer restarts
 - **System tray** — Runs quietly in the background with tray controls
-- **Clean Windows 11 UI** — Dark theme, Segoe UI Variable, native-feeling controls
+- **Clean Windows 11 UI** — Fluent-inspired cards and controls, live desktop status, and a title bar that follows the app theme
 - **Light/Dark/System theme** — Follows the Windows app theme by default, or pick Light/Dark in Settings
 
 ## Supported Formats
@@ -50,9 +52,9 @@ For best performance, use H.264 MP4 files at your screen resolution or lower.
 
 ### Portable (recommended)
 
-1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.0.3-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
-   - `Intonaco-v1.0.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites (≈60–80 MB)
-   - `Intonaco-v1.0.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
+1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.1.0-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
+   - `Intonaco-v1.1.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites (≈60–80 MB)
+   - `Intonaco-v1.1.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
 2. Extract to any folder
 3. Run `Intonaco.exe`
 
@@ -81,28 +83,38 @@ dotnet test Intonaco.sln -c Release
 ## Usage
 
 1. Launch Intonaco
-2. Click **Choose file** and select a video
+2. Click **Choose Video**, or drag a video anywhere onto the window
 3. The video immediately begins playing on your desktop
-4. Minimize Intonaco to the system tray — it keeps running in the background
+4. Tune **Fit**, **Playback speed**, volume and looping in Playback Settings
+5. Minimize Intonaco to the system tray — it keeps running in the background
+
+Videos you apply are kept under **Recent wallpapers** for one-click reuse.
 
 ### Controls
 
-| Action          | Description                              |
-| --------------- | ---------------------------------------- |
-| Choose file     | Select a video file as wallpaper         |
-| ▶ / ⏸           | Play or pause the wallpaper              |
-| ⏹               | Stop wallpaper and restore default desktop |
-| 🔇 / 🔊          | Toggle audio (muted by default)          |
-| Volume slider   | Adjust wallpaper audio volume            |
+| Action            | Description                                   |
+| ----------------- | --------------------------------------------- |
+| Choose Video      | Select a video file as wallpaper              |
+| Drag & drop       | Drop a supported video anywhere on the window |
+| Recent wallpapers | Reapply one of your last six wallpapers       |
+| ▶ / ❚❚            | Play or pause the wallpaper                   |
+| ■                 | Stop wallpaper and restore default desktop    |
+| Mute / volume     | Toggle or precisely adjust wallpaper audio    |
+| Open location     | Show the current video in File Explorer       |
 
 ### Settings
 
-| Setting             | Default | Description                                        |
-| ------------------- | ------- | -------------------------------------------------- |
-| Pause on fullscreen | On      | Pauses playback when a fullscreen app is active    |
-| Start with Windows  | Off     | Launch Intonaco at login (minimized to tray)       |
-| Frame rate limit    | 30 fps  | Limits playback frame rate to save resources       |
-| Theme               | System  | System (follow Windows), Light, or Dark appearance |
+| Setting             | Default | Description                                             |
+| ------------------- | ------- | ------------------------------------------------------- |
+| Wallpaper fit       | Fill    | Fill (crop), Fit (letterbox), or Stretch to the screen  |
+| Playback speed      | 1.0×    | Slow dramatic loops to 0.5× or speed them up to 1.5×   |
+| Frame rate limit    | 30 fps  | Playback frame-rate preference                          |
+| Loop playback       | On      | Restart the video when it reaches the end               |
+| Pause on fullscreen | On      | Pauses playback when a fullscreen app is active         |
+| Start with Windows  | Off     | Launch Intonaco at login                                |
+| Start minimized     | Off     | Open Intonaco in the system tray on launch              |
+| Resume last wallpaper | On    | Restore the previous wallpaper automatically on launch  |
+| Theme               | System  | System (follow Windows), Light, or Dark appearance      |
 
 Settings are stored in `%LocalAppData%\Intonaco\settings.json`. Run Intonaco with
 `--minimized` to start hidden in the tray (used by the Start with Windows entry).
@@ -168,8 +180,9 @@ desktop still doesn't change:
 
 - Make sure **desktop icons are shown** (right-click desktop → View → Show
   desktop icons) — some early 24H2 builds hid live wallpapers otherwise
-- Attach `%LocalAppData%\Intonaco\debug.log` to an issue — it records the
-  detected desktop layout, Progman's child z-order and the placement checks
+- Use **Open logs** in the footer and attach `debug.log` to an issue — it
+  records the detected desktop layout, Progman's child z-order and placement
+  checks
 
 ### "Failed to attach to desktop"
 

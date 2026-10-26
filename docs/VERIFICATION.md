@@ -11,8 +11,8 @@ are never silently skipped. If you run any of them, please report results
 ## Automated (CI, every push)
 
 - [x] `dotnet restore` + `dotnet build -c Release` succeeds on `windows-latest`
-- [x] `dotnet test -c Release` — settings, player, fullscreen-detector and
-      frame-rate-limiter tests pass
+- [x] `dotnet test -c Release` — settings normalization/recents, player
+      playback options, fullscreen-detector and frame-rate-limiter tests pass
 - [x] Framework-dependent and self-contained single-file publishes succeed
 
 ## Manual (interactive Windows 10/11 session)
@@ -36,6 +36,25 @@ are never silently skipped. If you run any of them, please report results
 - [ ] HEVC file plays when the HEVC Video Extension is installed
 - [ ] Play/Pause/Stop/Mute/volume from the main window and from the tray menu
 - [ ] Preview in the main window stays muted and stops on Stop
+- [ ] Dropping a supported video onto the window applies it; dropping a
+      non-video shows a friendly error
+- [ ] Applying a video adds it to Recent wallpapers, and a recent item reapplies
+      it in one click
+- [ ] Fill/Fit/Stretch changes both the preview and actual desktop immediately
+- [ ] Playback speed and Loop playback changes are honored by preview and
+      desktop playback
+- [ ] Moving the volume slider while muted unmutes and updates the percentage
+
+### v1.1.0 interface polish
+
+- [ ] The Desktop live/Paused/Ready/No video status pill matches the actual
+      desktop state
+- [ ] Dark, Light and System themes render readable cards, controls and
+      ComboBox popups; the native title bar follows the selected theme
+- [ ] The scrollable window remains usable at its minimum size and common
+      Windows display-scaling values (100%, 125%, 150%)
+- [ ] Open location reveals the current video in File Explorer, and Open logs
+      opens `%LocalAppData%\Intonaco`
 
 ### Power / shell events
 
@@ -70,10 +89,10 @@ and compare with the estimates in `README.md`:
 
 ## Known limitations
 
-- WPF `MediaElement` renders at the video's native frame rate; the FPS
-  setting is honored through `FrameRateLimiter` bookkeeping but true
-  per-frame throttling would need a Media Foundation pipeline with manual
-  presentation. Tracked as future work.
+- WPF `MediaElement` renders at the video's native frame rate. The FPS
+  preference is persisted, but a hard per-frame cap is not enforced on the
+  `MediaElement` path; true throttling would need a Media Foundation
+  pipeline with manual presentation. Tracked as future work.
 - Format support is bounded by installed Windows codecs (HEVC needs the
   HEVC Video Extensions).
 - The WorkerW technique relies on the undocumented `0x052C` Progman message.

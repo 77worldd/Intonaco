@@ -4,267 +4,614 @@
         xmlns:tb="http://www.hardcodet.net/taskbar"
         Title="Intonaco"
         Icon="/Assets/intonaco.ico"
-        Width="520" Height="600"
-        MinWidth="420" MinHeight="520"
+        Width="560" Height="720"
+        MinWidth="460" MinHeight="620"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBackgroundBrush}"
         FontFamily="{StaticResource DefaultFont}"
         SnapsToDevicePixels="True"
-        UseLayoutRounding="True">
+        UseLayoutRounding="True"
+        AllowDrop="True"
+        DragEnter="OnWindowDragEnter"
+        DragOver="OnWindowDragOver"
+        DragLeave="OnWindowDragLeave"
+        Drop="OnWindowDrop">
 
     <Window.TaskbarItemInfo>
         <TaskbarItemInfo Description="Intonaco — Live Wallpaper" />
     </Window.TaskbarItemInfo>
 
-    <Grid Margin="20">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />     <!-- Header -->
-            <RowDefinition Height="Auto" />     <!-- Preview area -->
-            <RowDefinition Height="Auto" />     <!-- File info -->
-            <RowDefinition Height="Auto" />     <!-- Playback controls -->
-            <RowDefinition Height="Auto" />     <!-- Settings -->
-            <RowDefinition Height="*" />        <!-- Spacer -->
-            <RowDefinition Height="Auto" />     <!-- Status bar -->
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Intonaco"
-                       FontSize="{StaticResource FontSizeTitle}"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimaryBrush}" />
-            <TextBlock Text="Live wallpaper for Windows"
-                       FontSize="{StaticResource FontSizeCaption}"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
-                       Margin="0,2,0,0" />
-        </StackPanel>
+        <ScrollViewer Grid.Row="0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      CanContentScroll="False"
+                      PanningMode="VerticalOnly">
+            <StackPanel Margin="22,20,22,8">
 
-        <!-- Preview -->
-        <Border Grid.Row="1"
-                Style="{StaticResource CardBorder}"
-                Padding="0"
-                Height="200"
-                Margin="0,0,0,12"
-                ClipToBounds="True">
-            <Grid>
-                <Border Background="#FF1A1A1A" CornerRadius="{StaticResource CardCornerRadius}" />
+                <!-- Header -->
+                <Grid Margin="0,0,0,18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <!-- Preview placeholder -->
-                <StackPanel x:Name="PreviewPlaceholder"
-                            VerticalAlignment="Center"
-                            HorizontalAlignment="Center">
-                    <TextBlock Text="&#xE714;"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="32"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Text="No wallpaper selected"
-                               FontSize="{StaticResource FontSizeCaption}"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               HorizontalAlignment="Center"
-                               Margin="0,8,0,0" />
-                </StackPanel>
+                    <Image Grid.Column="0"
+                           Source="/Assets/intonaco.png"
+                           Width="46" Height="46"
+                           Stretch="Uniform"
+                           VerticalAlignment="Center" />
 
-                <!-- Preview thumbnail -->
-                <MediaElement x:Name="PreviewMedia"
-                              Stretch="UniformToFill"
-                              LoadedBehavior="Manual"
-                              UnloadedBehavior="Close"
-                              IsMuted="True"
-                              Visibility="Collapsed"
-                              IsHitTestVisible="False" />
-            </Grid>
-        </Border>
+                    <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
+                        <TextBlock Text="Intonaco"
+                                   FontSize="24"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="Live wallpaper, behind your icons"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Margin="0,2,0,0" />
+                    </StackPanel>
 
-        <!-- File info & Choose button -->
-        <Grid Grid.Row="2" Margin="0,0,0,12">
+                    <Border x:Name="DesktopStatusPill"
+                            Grid.Column="2"
+                            Background="{DynamicResource SubtleBackgroundBrush}"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="999"
+                            Padding="10,6"
+                            VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse x:Name="DesktopStatusDot"
+                                     Width="8" Height="8"
+                                     Fill="{DynamicResource TextSecondaryBrush}"
+                                     VerticalAlignment="Center" />
+                            <TextBlock x:Name="DesktopStatusText"
+                                       Text="Ready"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="7,0,0,0"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Preview -->
+                <Border Style="{StaticResource CardBorder}"
+                        Padding="0"
+                        Height="232"
+                        Margin="0,0,0,14"
+                        ClipToBounds="True">
+                    <Grid>
+                        <Border Background="{DynamicResource PreviewBackgroundBrush}"
+                                CornerRadius="{StaticResource CardCornerRadius}" />
+
+                        <StackPanel x:Name="PreviewPlaceholder"
+                                    VerticalAlignment="Center"
+                                    HorizontalAlignment="Center"
+                                    Margin="24,20,24,52">
+                            <TextBlock Text="&#xE714;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="38"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock Text="Drop a video here"
+                                       FontSize="{StaticResource FontSizeSubtitle}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,10,0,0" />
+                            <TextBlock Text="or choose a file to set it as your desktop"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,4,0,0" />
+                            <TextBlock Text="MP4 • WebM • MKV • MOV • WMV"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,10,0,0" />
+                        </StackPanel>
+
+                        <MediaElement x:Name="PreviewMedia"
+                                      Stretch="UniformToFill"
+                                      LoadedBehavior="Manual"
+                                      UnloadedBehavior="Close"
+                                      IsMuted="True"
+                                      Visibility="Collapsed"
+                                      IsHitTestVisible="False" />
+
+                        <Border Height="58"
+                                VerticalAlignment="Bottom"
+                                CornerRadius="0,0,12,12"
+                                IsHitTestVisible="False">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#00000000" Offset="0" />
+                                    <GradientStop Color="#B3000000" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Grid Margin="14,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="Live preview"
+                                               FontSize="{StaticResource FontSizeCaption}"
+                                               FontWeight="SemiBold"
+                                               Foreground="White" />
+                                    <TextBlock Text="Muted preview — desktop playback is separate"
+                                               FontSize="11"
+                                               Foreground="#D9FFFFFF"
+                                               Margin="0,2,0,0"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+
+                                <Border Grid.Column="1"
+                                        Background="#33000000"
+                                        BorderBrush="#55FFFFFF"
+                                        BorderThickness="1"
+                                        CornerRadius="999"
+                                        Padding="8,4"
+                                        VerticalAlignment="Center">
+                                    <TextBlock x:Name="PreviewStatusText"
+                                               Text="No video"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="White" />
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <Border x:Name="DropOverlay"
+                                Background="#660078D4"
+                                BorderBrush="{DynamicResource AccentBrush}"
+                                BorderThickness="2"
+                                CornerRadius="{StaticResource CardCornerRadius}"
+                                Visibility="Collapsed"
+                                IsHitTestVisible="False">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="&#xE896;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="34"
+                                           Foreground="White"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="Release to apply wallpaper"
+                                           FontSize="{StaticResource FontSizeSubtitle}"
+                                           FontWeight="SemiBold"
+                                           Foreground="White"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,8,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Current file -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="CURRENT WALLPAPER"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                        <TextBlock x:Name="FileNameText"
+                                   Text="No file selected"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="310"
+                                   HorizontalAlignment="Left"
+                                   Margin="0,3,0,0" />
+                        <TextBlock x:Name="FileInfoText"
+                                   Text=""
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Margin="0,2,0,0" />
+                    </StackPanel>
+
+                    <Button Grid.Column="1"
+                            x:Name="OpenFolderButton"
+                            Style="{StaticResource IconButton}"
+                            Content="&#xE838;"
+                            ToolTip="Open file location"
+                            Click="OnOpenFileLocation"
+                            IsEnabled="False"
+                            Margin="8,0"
+                            VerticalAlignment="Center" />
+
+                    <Button Grid.Column="2"
+                            x:Name="ChooseFileButton"
+                            Content="Choose file"
+                            Style="{StaticResource AccentButton}"
+                            Click="OnChooseFile"
+                            Height="40"
+                            Padding="20,8"
+                            VerticalAlignment="Center" />
+                </Grid>
+
+                <!-- Playback controls -->
+                <Border Style="{StaticResource CardBorder}" Margin="0,14,0,14">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button x:Name="PlayPauseButton"
+                                Grid.Column="0"
+                                Style="{StaticResource AccentButton}"
+                                Content="&#xE768;"
+                                ToolTip="Play"
+                                Click="OnPlayPause"
+                                IsEnabled="False"
+                                Width="46" Height="46"
+                                Padding="0"
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="20" />
+
+                        <Button x:Name="StopButton"
+                                Grid.Column="1"
+                                Style="{StaticResource IconButton}"
+                                Content="&#xE71A;"
+                                ToolTip="Stop wallpaper"
+                                Click="OnStop"
+                                IsEnabled="False"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+
+                        <Button x:Name="MuteButton"
+                                Grid.Column="2"
+                                Style="{StaticResource IconButton}"
+                                Content="&#xE74F;"
+                                ToolTip="Unmute"
+                                Click="OnToggleMute"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center" />
+
+                        <Slider x:Name="VolumeSlider"
+                                Grid.Column="3"
+                                Style="{StaticResource IntonacoSlider}"
+                                Minimum="0" Maximum="100"
+                                Value="0"
+                                VerticalAlignment="Center"
+                                Margin="14,0,10,0"
+                                ValueChanged="OnVolumeChanged" />
+
+                        <TextBlock x:Name="VolumeText"
+                                   Grid.Column="4"
+                                   Text="0%"
+                                   Width="38"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextAlignment="Right"
+                                   VerticalAlignment="Center" />
+
+                        <TextBlock x:Name="StatusText"
+                                   Grid.Column="5"
+                                   Text="Stopped"
+                                   MaxWidth="96"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="10,0,0,0"
+                                   TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Border>
+
+                <!-- Recent wallpapers -->
+                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Recent wallpapers"
+                                           FontSize="{StaticResource FontSizeSubtitle}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="One click to bring a favorite back."
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,3,0,0" />
+                            </StackPanel>
+
+                            <Button Grid.Column="1"
+                                    x:Name="ClearRecentsButton"
+                                    Style="{StaticResource GhostButton}"
+                                    Content="Clear"
+                                    ToolTip="Clear recent wallpapers"
+                                    Click="OnClearRecentWallpapers"
+                                    VerticalAlignment="Top" />
+                        </Grid>
+
+                        <TextBlock x:Name="RecentEmptyText"
+                                   Text="Videos you apply will appear here for quick reuse."
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Margin="0,14,0,0" />
+
+                        <ItemsControl x:Name="RecentList" Margin="0,12,0,0" HorizontalContentAlignment="Stretch">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource RecentItemButton}"
+                                            HorizontalAlignment="Stretch"
+                                            Tag="{Binding FullPath}"
+                                            ToolTip="{Binding FullPath}"
+                                            Click="OnRecentWallpaperClick"
+                                            Margin="0,0,0,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Column="0"
+                                                    Width="36" Height="36"
+                                                    Background="{DynamicResource AccentSoftBrush}"
+                                                    CornerRadius="9">
+                                                <TextBlock Text="&#xE714;"
+                                                           FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="16"
+                                                           Foreground="{DynamicResource AccentBrush}"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <StackPanel Grid.Column="1" Margin="10,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding FileName}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Meta}"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                                           Margin="0,2,0,0"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Column="2"
+                                                       Text="&#xE768;"
+                                                       FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="14"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- Playback and display settings -->
+                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Text="Playback &amp; display"
+                                   FontSize="{StaticResource FontSizeSubtitle}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,0,0,16" />
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="Wallpaper fit"
+                                           FontSize="{StaticResource FontSizeBody}"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Fill crops edges; Fit shows the whole frame"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,2,12,0" />
+                            </StackPanel>
+
+                            <ComboBox x:Name="FitComboBox"
+                                      Grid.Column="1"
+                                      Style="{StaticResource IntonacoComboBox}"
+                                      Width="132"
+                                      SelectionChanged="OnFitChanged"
+                                      VerticalAlignment="Center">
+                                <ComboBoxItem Content="Fill screen" Tag="Fill" IsSelected="True" />
+                                <ComboBoxItem Content="Fit frame" Tag="Fit" />
+                                <ComboBoxItem Content="Stretch" Tag="Stretch" />
+                            </ComboBox>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="Playback speed"
+                                           FontSize="{StaticResource FontSizeBody}"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Slow ambient loops or make short clips livelier"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,2,12,0" />
+                            </StackPanel>
+
+                            <ComboBox x:Name="SpeedComboBox"
+                                      Grid.Column="1"
+                                      Style="{StaticResource IntonacoComboBox}"
+                                      Width="104"
+                                      SelectionChanged="OnSpeedChanged"
+                                      VerticalAlignment="Center">
+                                <ComboBoxItem Content="0.5×" Tag="0.5" />
+                                <ComboBoxItem Content="0.75×" Tag="0.75" />
+                                <ComboBoxItem Content="1×" Tag="1" IsSelected="True" />
+                                <ComboBoxItem Content="1.25×" Tag="1.25" />
+                                <ComboBoxItem Content="1.5×" Tag="1.5" />
+                            </ComboBox>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="Frame rate limit"
+                                           FontSize="{StaticResource FontSizeBody}"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Lower values favor battery and quieter fans"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,2,12,0" />
+                            </StackPanel>
+
+                            <ComboBox x:Name="FpsComboBox"
+                                      Grid.Column="1"
+                                      Style="{StaticResource IntonacoComboBox}"
+                                      Width="104"
+                                      SelectionChanged="OnFpsChanged"
+                                      VerticalAlignment="Center">
+                                <ComboBoxItem Content="15 fps" Tag="15" />
+                                <ComboBoxItem Content="24 fps" Tag="24" />
+                                <ComboBoxItem Content="30 fps" Tag="30" IsSelected="True" />
+                                <ComboBoxItem Content="60 fps" Tag="60" />
+                            </ComboBox>
+                        </Grid>
+
+                        <CheckBox x:Name="LoopToggle"
+                                  Style="{StaticResource IntonacoToggle}"
+                                  Content="Loop video"
+                                  Margin="0,0,0,12"
+                                  Checked="OnLoopChanged"
+                                  Unchecked="OnLoopChanged" />
+
+                        <CheckBox x:Name="PauseFullscreenToggle"
+                                  Style="{StaticResource IntonacoToggle}"
+                                  Content="Pause when fullscreen app is active"
+                                  Checked="OnSettingChanged"
+                                  Unchecked="OnSettingChanged" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Startup and appearance settings -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock Text="Startup &amp; appearance"
+                                   FontSize="{StaticResource FontSizeSubtitle}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,0,0,16" />
+
+                        <CheckBox x:Name="StartWithWindowsToggle"
+                                  Style="{StaticResource IntonacoToggle}"
+                                  Content="Start with Windows"
+                                  Margin="0,0,0,12"
+                                  Checked="OnStartupChanged"
+                                  Unchecked="OnStartupChanged" />
+
+                        <CheckBox x:Name="StartMinimizedToggle"
+                                  Style="{StaticResource IntonacoToggle}"
+                                  Content="Start minimized to tray"
+                                  Margin="0,0,0,12"
+                                  Checked="OnStartMinimizedChanged"
+                                  Unchecked="OnStartMinimizedChanged" />
+
+                        <CheckBox x:Name="AutoPlayToggle"
+                                  Style="{StaticResource IntonacoToggle}"
+                                  Content="Resume last wallpaper on launch"
+                                  Margin="0,0,0,16"
+                                  Checked="OnAutoPlayChanged"
+                                  Unchecked="OnAutoPlayChanged" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="Theme"
+                                           FontSize="{StaticResource FontSizeBody}"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="System follows Windows appearance"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,2,12,0" />
+                            </StackPanel>
+
+                            <ComboBox x:Name="ThemeComboBox"
+                                      Grid.Column="1"
+                                      Style="{StaticResource IntonacoComboBox}"
+                                      Width="116"
+                                      SelectionChanged="OnThemeChanged"
+                                      VerticalAlignment="Center">
+                                <ComboBoxItem Content="System" Tag="System" IsSelected="True" />
+                                <ComboBoxItem Content="Light" Tag="Light" />
+                                <ComboBoxItem Content="Dark" Tag="Dark" />
+                            </ComboBox>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer -->
+        <Grid Grid.Row="1" Margin="22,10,22,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                <TextBlock x:Name="FileNameText"
-                           Text="No file selected"
-                           FontSize="{StaticResource FontSizeBody}"
-                           Foreground="{DynamicResource TextPrimaryBrush}"
-                           TextTrimming="CharacterEllipsis"
-                           MaxWidth="300"
-                           HorizontalAlignment="Left" />
-                <TextBlock x:Name="FileInfoText"
-                           Text=""
-                           FontSize="{StaticResource FontSizeCaption}"
-                           Foreground="{DynamicResource TextSecondaryBrush}"
-                           Margin="0,2,0,0" />
-            </StackPanel>
-
-            <Button Grid.Column="1"
-                    x:Name="ChooseFileButton"
-                    Content="Choose file"
-                    Style="{StaticResource AccentButton}"
-                    Click="OnChooseFile"
-                    Padding="20,8" />
-        </Grid>
-
-        <!-- Playback controls -->
-        <Border Grid.Row="3"
-                Style="{StaticResource CardBorder}"
-                Margin="0,0,0,12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <!-- Play/Pause -->
-                <Button x:Name="PlayPauseButton"
-                        Grid.Column="0"
-                        Style="{StaticResource IconButton}"
-                        Content="&#xE768;"
-                        ToolTip="Play"
-                        Click="OnPlayPause"
-                        IsEnabled="False"
-                        FontSize="20" />
-
-                <!-- Stop -->
-                <Button x:Name="StopButton"
-                        Grid.Column="1"
-                        Style="{StaticResource IconButton}"
-                        Content="&#xE71A;"
-                        ToolTip="Stop wallpaper"
-                        Click="OnStop"
-                        IsEnabled="False"
-                        Margin="4,0" />
-
-                <!-- Mute toggle -->
-                <Button x:Name="MuteButton"
-                        Grid.Column="2"
-                        Style="{StaticResource IconButton}"
-                        Content="&#xE74F;"
-                        ToolTip="Unmute"
-                        Click="OnToggleMute" />
-
-                <!-- Volume slider -->
-                <Slider x:Name="VolumeSlider"
-                        Grid.Column="3"
-                        Style="{StaticResource IntonacoSlider}"
-                        Minimum="0" Maximum="100"
-                        Value="0"
-                        VerticalAlignment="Center"
-                        Margin="8,0"
-                        ValueChanged="OnVolumeChanged" />
-
-                <!-- Status indicator -->
-                <TextBlock x:Name="StatusText"
-                           Grid.Column="5"
-                           Text="Stopped"
-                           FontSize="{StaticResource FontSizeCaption}"
-                           Foreground="{DynamicResource TextSecondaryBrush}"
-                           VerticalAlignment="Center"
-                           Margin="8,0,0,0" />
-            </Grid>
-        </Border>
-
-        <!-- Settings section -->
-        <Border Grid.Row="4"
-                Style="{StaticResource CardBorder}">
-            <StackPanel>
-                <TextBlock Text="Settings"
-                           FontSize="{StaticResource FontSizeSubtitle}"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimaryBrush}"
-                           Margin="0,0,0,12" />
-
-                <!-- Pause on fullscreen -->
-                <CheckBox x:Name="PauseFullscreenToggle"
-                          Style="{StaticResource IntonacoToggle}"
-                          Content="Pause when fullscreen app is active"
-                          Margin="0,0,0,10"
-                          Checked="OnSettingChanged"
-                          Unchecked="OnSettingChanged" />
-
-                <!-- Start with Windows -->
-                <CheckBox x:Name="StartWithWindowsToggle"
-                          Style="{StaticResource IntonacoToggle}"
-                          Content="Start with Windows"
-                          Margin="0,0,0,10"
-                          Checked="OnStartupChanged"
-                          Unchecked="OnStartupChanged" />
-
-                <!-- FPS Limit -->
-                <Grid Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock Text="Frame rate limit"
-                               FontSize="{StaticResource FontSizeBody}"
-                               Foreground="{DynamicResource TextPrimaryBrush}"
-                               VerticalAlignment="Center" />
-
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <ComboBox x:Name="FpsComboBox"
-                                  Width="80"
-                                  SelectionChanged="OnFpsChanged"
-                                  VerticalAlignment="Center">
-                            <ComboBoxItem Content="15 fps" Tag="15" />
-                            <ComboBoxItem Content="24 fps" Tag="24" />
-                            <ComboBoxItem Content="30 fps" Tag="30" IsSelected="True" />
-                            <ComboBoxItem Content="60 fps" Tag="60" />
-                        </ComboBox>
-                    </StackPanel>
-                </Grid>
-
-                <!-- Theme -->
-                <Grid Margin="0,10,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock Text="Theme"
-                               FontSize="{StaticResource FontSizeBody}"
-                               Foreground="{DynamicResource TextPrimaryBrush}"
-                               VerticalAlignment="Center" />
-
-                    <ComboBox x:Name="ThemeComboBox"
-                              Grid.Column="1"
-                              Width="100"
-                              SelectionChanged="OnThemeChanged"
-                              VerticalAlignment="Center">
-                        <ComboBoxItem Content="System" Tag="System" IsSelected="True" />
-                        <ComboBoxItem Content="Light" Tag="Light" />
-                        <ComboBoxItem Content="Dark" Tag="Dark" />
-                    </ComboBox>
-                </Grid>
-            </StackPanel>
-        </Border>
-
-        <!-- Status bar -->
-        <Grid Grid.Row="6" Margin="0,8,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBlock x:Name="ErrorText"
+                       Grid.Column="0"
                        Text=""
                        FontSize="{StaticResource FontSizeCaption}"
                        Foreground="{DynamicResource ErrorBrush}"
                        VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" />
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
 
-            <TextBlock Grid.Column="1"
+            <Button Grid.Column="1"
+                    Style="{StaticResource GhostButton}"
+                    Content="Open logs"
+                    ToolTip="Open the Intonaco log folder"
+                    Click="OnOpenLogs"
+                    VerticalAlignment="Center" />
+
+            <TextBlock Grid.Column="2"
                        x:Name="VersionText"
                        Text="v1.0.0"
                        FontSize="{StaticResource FontSizeCaption}"
                        Foreground="{DynamicResource TextSecondaryBrush}"
-                       VerticalAlignment="Center" />
+                       VerticalAlignment="Center"
+                       Margin="8,0,0,0" />
         </Grid>
 
         <!-- System tray icon -->
