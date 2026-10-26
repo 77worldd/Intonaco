@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -90,9 +92,7 @@ namespace Intonaco.Tests
         [WpfFact]
         public async Task Player_PauseSuspendsPipelineAndResumeReopensIt()
         {
-            string? sample = FindSampleVideo();
-            Assert.True(sample != null,
-                "A Windows WinSAT sample video is required for the media lifecycle test.");
+            string sample = CreateSampleVideo();
 
             EnsureApplication();
 
@@ -112,9 +112,9 @@ namespace Intonaco.Tests
                 window.UpdateLayout();
 
                 Task<bool> firstOpen = WaitForMediaOpenedAsync(player);
-                Assert.True(player.Play(sample!));
-                if (!await firstOpen)
-                    return; // The CI image may not include a usable codec.
+                Assert.True(player.Play(sample));
+                Assert.True(await firstOpen,
+                    "The generated uncompressed AVI should open through Media Foundation.");
 
                 await Task.Delay(500);
                 player.Pause();
@@ -144,23 +144,157 @@ namespace Intonaco.Tests
             }
         }
 
-        private static string? FindSampleVideo()
+        private static string CreateSampleVideo()
         {
-            string folder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-                "Performance",
-                "WinSAT");
+            const int width = 320;
+            const int height = 180;
+            const int framesPerSecond = 10;
+            const int frameCount = 30;
+            int stride = ((width * 3 + 3) / 4) * 4;
+            int frameBytes = stride * height;
 
-            if (!Directory.Exists(folder))
-                return null;
+            string folder = Path.Combine(Path.GetTempPath(), "Intonaco.Tests");
+            Directory.CreateDirectory(folder);
+            string path = Path.Combine(folder, "lifecycle-sample.avi");
+            if (File.Exists(path) && new FileInfo(path).Length > frameBytes * frameCount)
+                return path;
 
-            return Directory
-                .EnumerateFiles(folder)
-                .Where(path =>
-                    path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
-                    path.EndsWith(".wmv", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(path => new FileInfo(path).Length)
-                .FirstOrDefault();
+            static void WriteFourCC(BinaryWriter writer, string value)
+            {
+                writer.Write(Encoding.ASCII.GetBytes(value));
+            }
+
+            static void PatchSize(MemoryStream stream, BinaryWriter writer, long sizePosition, long currentPosition)
+            {
+                long end = stream.Position;
+                stream.Position = sizePosition;
+                writer.Write((uint)(end - currentPosition));
+                stream.Position = end;
+            }
+
+            using var stream = new MemoryStream();
+            using var writer = new BinaryWriter(stream, Encoding.ASCII, leaveOpen: true);
+
+            WriteFourCC(writer, "RIFF");
+            long riffSizePosition = stream.Position;
+            writer.Write(0u);
+            WriteFourCC(writer, "AVI ");
+
+            WriteFourCC(writer, "LIST");
+            long headerListSizePosition = stream.Position;
+            writer.Write(0u);
+            long headerListDataPosition = stream.Position;
+            WriteFourCC(writer, "hdrl");
+
+            WriteFourCC(writer, "avih");
+            writer.Write(56u);
+            writer.Write((uint)(1_000_000 / framesPerSecond));
+            writer.Write((uint)(frameBytes * framesPerSecond));
+            writer.Write(0u);        // Padding granularity
+            writer.Write(0x10u);     // AVIF_HASINDEX
+            writer.Write((uint)frameCount);
+            writer.Write(0u);        // Initial frames
+            writer.Write(1u);        // Streams
+            writer.Write((uint)frameBytes);
+            writer.Write((uint)width);
+            writer.Write((uint)height);
+            writer.Write(0u);
+            writer.Write(0u);
+            writer.Write(0u);
+            writer.Write(0u);
+
+            WriteFourCC(writer, "LIST");
+            long streamListSizePosition = stream.Position;
+            writer.Write(0u);
+            long streamListDataPosition = stream.Position;
+            WriteFourCC(writer, "strl");
+
+            WriteFourCC(writer, "strh");
+            writer.Write(56u);
+            WriteFourCC(writer, "vids");
+            WriteFourCC(writer, "DIB ");
+            writer.Write(0u);        // Flags
+            writer.Write(0u);        // Priority/language
+            writer.Write(0u);        // Initial frames
+            writer.Write(1u);        // Scale
+            writer.Write((uint)framesPerSecond);
+            writer.Write(0u);        // Start
+            writer.Write((uint)frameCount);
+            writer.Write((uint)frameBytes);
+            writer.Write(uint.MaxValue); // Quality
+            writer.Write(0u);        // Sample size
+            writer.Write((short)0);
+            writer.Write((short)0);
+            writer.Write((short)width);
+            writer.Write((short)height);
+
+            WriteFourCC(writer, "strf");
+            writer.Write(40u);
+            writer.Write(40u);       // BITMAPINFOHEADER size
+            writer.Write(width);
+            writer.Write(height);    // Positive: bottom-up DIB
+            writer.Write((short)1);  // Planes
+            writer.Write((short)24); // Bits per pixel
+            writer.Write(0u);        // BI_RGB
+            writer.Write((uint)frameBytes);
+            writer.Write(0);
+            writer.Write(0);
+            writer.Write(0u);
+            writer.Write(0u);
+
+            PatchSize(stream, writer, streamListSizePosition, streamListDataPosition);
+            PatchSize(stream, writer, headerListSizePosition, headerListDataPosition);
+
+            WriteFourCC(writer, "LIST");
+            long movieListSizePosition = stream.Position;
+            writer.Write(0u);
+            long movieListDataPosition = stream.Position;
+            long movieFourCCPosition = stream.Position;
+            WriteFourCC(writer, "movi");
+
+            var frameData = new byte[frameBytes];
+            var frameOffsets = new List<uint>(frameCount);
+
+            for (int frame = 0; frame < frameCount; frame++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    int row = y * stride;
+                    byte green = (byte)(y * 255 / (height - 1));
+                    for (int x = 0; x < width; x++)
+                    {
+                        int pixel = row + x * 3;
+                        frameData[pixel] = (byte)((x + frame * 8) % 256);     // Blue
+                        frameData[pixel + 1] = green;                         // Green
+                        frameData[pixel + 2] = (byte)(255 - x * 255 / (width - 1)); // Red
+                    }
+                }
+
+                frameOffsets.Add((uint)(stream.Position - movieFourCCPosition));
+                WriteFourCC(writer, "00db");
+                writer.Write((uint)frameBytes);
+                writer.Write(frameData);
+                if ((frameBytes & 1) != 0)
+                    writer.Write((byte)0);
+            }
+
+            PatchSize(stream, writer, movieListSizePosition, movieListDataPosition);
+
+            WriteFourCC(writer, "idx1");
+            writer.Write((uint)(frameCount * 16));
+            foreach (uint offset in frameOffsets)
+            {
+                WriteFourCC(writer, "00db");
+                writer.Write(0x10u); // AVIIF_KEYFRAME; every AVI frame here is raw
+                writer.Write(offset);
+                writer.Write((uint)frameBytes);
+            }
+
+            PatchSize(stream, writer, riffSizePosition, riffSizePosition + sizeof(uint));
+            writer.Flush();
+
+            File.WriteAllBytes(path, stream.ToArray());
+            return path;
         }
 
         private static async Task<bool> WaitForMediaOpenedAsync(WallpaperPlayer player)
