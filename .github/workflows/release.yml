@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build a release for (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish official release
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag || github.ref_name }}"
+          if (-not $tag.StartsWith("v")) { throw "Tag '$tag' must start with 'v'" }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
+          Write-Host "Building release $tag"
+
+      - name: Restore
+        run: dotnet restore Intonaco.sln
+
+      - name: Build
+        run: >-
+          dotnet build Intonaco.sln -c Release --no-restore
+          /p:Version=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test Intonaco.sln -c Release --no-build
+
+      - name: Publish (framework-dependent, single file)
+        run: >-
+          dotnet publish src/Intonaco/Intonaco.csproj -c Release -r win-x64
+          --self-contained false -o publish/framework-dependent
+          /p:Version=${{ steps.version.outputs.version }}
+
+      - name: Publish (self-contained, single file)
+        run: >-
+          dotnet publish src/Intonaco/Intonaco.csproj -c Release -r win-x64
+          --self-contained true -o publish/self-contained
+          /p:Version=${{ steps.version.outputs.version }}
+
+      - name: Package zips and checksums
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          New-Item -ItemType Directory -Force release | Out-Null
+
+          # Ship the license/notices next to the executable.
+          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md publish/framework-dependent/
+          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md publish/self-contained/
+
+          $fd = "release/Intonaco-v$version-win-x64-framework-dependent.zip"
+          $sc = "release/Intonaco-v$version-win-x64-self-contained.zip"
+          Compress-Archive -Path publish/framework-dependent/* -DestinationPath $fd
+          Compress-Archive -Path publish/self-contained/* -DestinationPath $sc
+
+          $lines = foreach ($zip in @($fd, $sc)) {
+            $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $(Split-Path $zip -Leaf)"
+          }
+          $lines | Set-Content release/SHA256SUMS.txt -Encoding ascii
+          Get-ChildItem release | Format-Table Name, Length
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Intonaco ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            **Lightweight live wallpaper for Windows 11** — video wallpapers behind your desktop icons, decoded by Windows Media Foundation (DXVA2). No VLC, no browser engine, single process.
+
+            ### Downloads
+            | File | Use when |
+            | --- | --- |
+            | `Intonaco-v${{ steps.version.outputs.version }}-win-x64-self-contained.zip` | You want zero prerequisites — runs on any Windows 10 1903+/11 x64 PC |
+            | `Intonaco-v${{ steps.version.outputs.version }}-win-x64-framework-dependent.zip` | You already have the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (much smaller download) |
+
+            Extract anywhere and run `Intonaco.exe`. Verify downloads with `SHA256SUMS.txt`.
+
+            See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/CHANGELOG.md) for everything in this release, and [docs/VERIFICATION.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/docs/VERIFICATION.md) for the on-device test checklist.
+          files: |
+            release/*.zip
+            release/SHA256SUMS.txt
+          fail_on_unmatched_files: true

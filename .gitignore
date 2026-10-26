@@ -1,0 +1,34 @@
+## Build results
+bin/
+obj/
+publish/
+out/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+*.csproj.user
+
+## Rider
+.idea/
+
+## OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+## Debug
+*.log
+launchSettings.json
+
+## Packages
+packages/
+
+## Publish profiles
+*.pubxml
+
+## Test results & artifacts
+TestResults/
+artifacts/
+*.trx
