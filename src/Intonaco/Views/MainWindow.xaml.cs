@@ -65,8 +65,11 @@ namespace Intonaco.Views
 
         // Periodic desktop-placement self-check (Explorer can reshuffle
         // its desktop windows and cover the player, e.g. after a
-        // wallpaper change recreates the system WorkerW).
+        // wallpaper change recreates the system WorkerW). It is started
+        // only while a wallpaper is applied and runs less often while the
+        // wallpaper is a static suspended frame.
         private DispatcherTimer? _placementTimer;
+        private DispatcherTimer? _settingsSaveTimer;
 
         public MainWindow()
         {
