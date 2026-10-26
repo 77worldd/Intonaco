@@ -214,7 +214,7 @@ namespace Intonaco.Core
             }
         }
 
-        private void OnMediaFailed(object sender, ExceptionRoutedEventArgs e)
+        private void OnMediaFailed(object? sender, ExceptionRoutedEventArgs e)
         {
             string msg = e.ErrorException?.Message ?? "Unknown playback error";
             ErrorOccurred?.Invoke(msg);
