@@ -4,6 +4,57 @@ All notable changes to Intonaco are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-10-26
+
+A creativity and polish release built on the user-verified v1.0.3 desktop
+engine. No changes were made to the raised-desktop attachment path.
+
+### Added
+
+- **Drag-and-drop wallpapers:** drop an MP4, WebM, MKV, MOV, AVI, WMV or
+  M4V anywhere on the main window to apply it immediately, with a clear
+  drop overlay while dragging.
+- **Recent wallpapers:** the last six applied videos are remembered with
+  file name, size and folder, ready for one-click reuse.
+- **Wallpaper fit modes:** Fill (crop), Fit (letterbox) and Stretch now
+  apply live to both the in-app preview and the desktop player.
+- **Playback speed and looping controls:** choose 0.5×, 0.75×, 1.0×,
+  1.25× or 1.5× playback, and optionally stop instead of looping.
+- **Startup preferences in the UI:** Start minimized and Resume last
+  wallpaper are now visible toggles alongside Start with Windows.
+- **Quick file and diagnostics actions:** reveal the current video in
+  File Explorer or open the Intonaco log folder from the footer.
+- The file card now reports the video's natural resolution and duration
+  when Windows Media Foundation provides them.
+
+### Changed
+
+- Rebuilt the main window as a cleaner Fluent-inspired, scrollable
+  layout with the app identity in the header, a live **Desktop live /
+  Paused / Ready / No video** status pill, and clearer grouping for
+  wallpaper, playback and app preferences.
+- The preview is larger and carries a status chip; the current file,
+  metadata, playback and volume controls are aligned into one compact
+  card.
+- Refreshed both dark and light themes with softer blue-gray surfaces,
+  an accent-gradient primary action, larger radii, subtle borders and
+  more consistent typography and spacing.
+- Combo boxes and their drop-down popups are now fully themed in both
+  appearances instead of using the default white Windows popup.
+- The volume slider now has a filled accent track, a clearly visible
+  thumb and a live percentage label.
+- Moving the volume slider while muted unmutes playback, matching the
+  behavior users expect from media controls.
+- The native Windows title bar now follows Intonaco's light/dark theme
+  through DWM immersive dark mode.
+- Settings are normalized on load/save so fit, speed, theme, volume,
+  frame-rate and recent-wallpaper values stay canonical and bounded.
+
+### Added tests
+
+- Settings normalization, recent-wallpaper de-duplication/capping, and
+  player playback-speed/fit/loop defaults.
+
 ## [1.0.3] — 2026-10-26
 
 Fix for v1.0.2 still leaving the static wallpaper on Windows 11 26H2,

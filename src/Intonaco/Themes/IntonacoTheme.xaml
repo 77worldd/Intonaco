@@ -3,21 +3,27 @@
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
     <!-- Windows 11 inspired color palette - Dark theme -->
-    <Color x:Key="WindowBackgroundColor">#FF202020</Color>
-    <Color x:Key="CardBackgroundColor">#FF2D2D2D</Color>
-    <Color x:Key="CardBorderColor">#FF3D3D3D</Color>
+    <Color x:Key="WindowBackgroundColor">#FF17191D</Color>
+    <Color x:Key="CardBackgroundColor">#FF22242A</Color>
+    <Color x:Key="CardBorderColor">#FF34363F</Color>
     <Color x:Key="TextPrimaryColor">#FFFFFFFF</Color>
-    <Color x:Key="TextSecondaryColor">#FF999999</Color>
+    <Color x:Key="TextSecondaryColor">#FFA7AAB3</Color>
     <Color x:Key="AccentColor">#FF0078D4</Color>
-    <Color x:Key="AccentHoverColor">#FF1A8AD4</Color>
+    <Color x:Key="AccentHoverColor">#FF2B8FE0</Color>
     <Color x:Key="AccentPressedColor">#FF006CBE</Color>
-    <Color x:Key="ButtonBackgroundColor">#FF333333</Color>
-    <Color x:Key="ButtonHoverColor">#FF3D3D3D</Color>
-    <Color x:Key="ButtonPressedColor">#FF2A2A2A</Color>
-    <Color x:Key="ButtonBorderColor">#FF4D4D4D</Color>
-    <Color x:Key="DividerColor">#FF3D3D3D</Color>
-    <Color x:Key="ErrorColor">#FFFF4444</Color>
-    <Color x:Key="SuccessColor">#FF44CC44</Color>
+    <Color x:Key="ButtonBackgroundColor">#FF2A2C33</Color>
+    <Color x:Key="ButtonHoverColor">#FF35373F</Color>
+    <Color x:Key="ButtonPressedColor">#FF24262C</Color>
+    <Color x:Key="ButtonBorderColor">#FF3D4049</Color>
+    <Color x:Key="DividerColor">#FF30323A</Color>
+    <Color x:Key="InputBackgroundColor">#FF24262C</Color>
+    <Color x:Key="InputHoverColor">#FF2C2E35</Color>
+    <Color x:Key="InputBorderColor">#FF3D4049</Color>
+    <Color x:Key="SubtleBackgroundColor">#FF26282F</Color>
+    <Color x:Key="PreviewBackgroundColor">#FF101116</Color>
+    <Color x:Key="TrackBackgroundColor">#FF3A3D46</Color>
+    <Color x:Key="ErrorColor">#FFFF6B6B</Color>
+    <Color x:Key="SuccessColor">#FF51D88A</Color>
 
     <!-- Brushes -->
     <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{StaticResource WindowBackgroundColor}" />
@@ -33,8 +39,22 @@
     <SolidColorBrush x:Key="ButtonPressedBrush" Color="{StaticResource ButtonPressedColor}" />
     <SolidColorBrush x:Key="ButtonBorderBrush" Color="{StaticResource ButtonBorderColor}" />
     <SolidColorBrush x:Key="DividerBrush" Color="{StaticResource DividerColor}" />
+    <SolidColorBrush x:Key="InputBackgroundBrush" Color="{StaticResource InputBackgroundColor}" />
+    <SolidColorBrush x:Key="InputHoverBrush" Color="{StaticResource InputHoverColor}" />
+    <SolidColorBrush x:Key="InputBorderBrush" Color="{StaticResource InputBorderColor}" />
+    <SolidColorBrush x:Key="SubtleBackgroundBrush" Color="{StaticResource SubtleBackgroundColor}" />
+    <SolidColorBrush x:Key="PreviewBackgroundBrush" Color="{StaticResource PreviewBackgroundColor}" />
+    <SolidColorBrush x:Key="TrackBackgroundBrush" Color="{StaticResource TrackBackgroundColor}" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#330078D4" />
+    <SolidColorBrush x:Key="SuccessSoftBrush" Color="#2651D88A" />
+    <SolidColorBrush x:Key="ErrorSoftBrush" Color="#26FF6B6B" />
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
+    <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#FF2B9BEB" Offset="0" />
+        <GradientStop Color="#FF0078D4" Offset="0.55" />
+        <GradientStop Color="#FF5B5BD6" Offset="1" />
+    </LinearGradientBrush>
 
     <!-- Typography -->
     <FontFamily x:Key="DefaultFont">Segoe UI Variable, Segoe UI, sans-serif</FontFamily>
@@ -44,9 +64,9 @@
     <sys:Double x:Key="FontSizeTitle">20</sys:Double>
 
     <!-- Corner radius matching Windows 11 -->
-    <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
-    <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
-    <CornerRadius x:Key="WindowCornerRadius">8</CornerRadius>
+    <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
+    <CornerRadius x:Key="CardCornerRadius">12</CornerRadius>
+    <CornerRadius x:Key="WindowCornerRadius">12</CornerRadius>
 
     <!-- Button Style -->
     <Style x:Key="IntonacoButton" TargetType="Button">
@@ -92,9 +112,10 @@
 
     <!-- Accent Button Style -->
     <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource IntonacoButton}">
-        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
         <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -126,12 +147,15 @@
         </Setter>
     </Style>
 
-    <!-- Icon Button Style (borderless) -->
+    <!-- Icon Button Style -->
     <Style x:Key="IconButton" TargetType="Button">
-        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Background" Value="{DynamicResource SubtleBackgroundBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Padding" Value="8" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Width" Value="38" />
+        <Setter Property="Height" Value="38" />
+        <Setter Property="Padding" Value="0" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
         <Setter Property="FontSize" Value="16" />
@@ -140,7 +164,9 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Bd"
                             Background="{TemplateBinding Background}"
-                            CornerRadius="{StaticResource ControlCornerRadius}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="10"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center" />
@@ -153,6 +179,59 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bd" Property="Background"
                                     Value="{DynamicResource ButtonPressedBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Quiet text action -->
+    <Style x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource IntonacoButton}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+        <Setter Property="Padding" Value="8,5" />
+    </Style>
+
+    <!-- Full-width recent wallpaper row -->
+    <Style x:Key="RecentItemButton" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource SubtleBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="10"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource ButtonHoverBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush"
+                                    Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource ButtonPressedBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -170,17 +249,17 @@
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
                     <StackPanel Orientation="Horizontal">
-                        <Grid Width="40" Height="20" Margin="0,0,10,0">
+                        <Grid Width="44" Height="24" Margin="0,0,12,0" VerticalAlignment="Center">
                             <Border x:Name="Track"
-                                    Background="{DynamicResource ButtonBackgroundBrush}"
+                                    Background="{DynamicResource TrackBackgroundBrush}"
                                     BorderBrush="{DynamicResource ButtonBorderBrush}"
                                     BorderThickness="1"
-                                    CornerRadius="10"
+                                    CornerRadius="12"
                                     SnapsToDevicePixels="True" />
                             <Border x:Name="Thumb"
-                                    Width="14" Height="14"
-                                    CornerRadius="7"
-                                    Background="{DynamicResource TextSecondaryBrush}"
+                                    Width="18" Height="18"
+                                    CornerRadius="9"
+                                    Background="White"
                                     HorizontalAlignment="Left"
                                     Margin="3,0,0,0"
                                     SnapsToDevicePixels="True" />
@@ -210,35 +289,206 @@
     <Style x:Key="IntonacoSlider" TargetType="Slider">
         <Setter Property="Minimum" Value="0" />
         <Setter Property="Maximum" Value="100" />
-        <Setter Property="Height" Value="24" />
+        <Setter Property="Height" Value="28" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
-                    <Grid>
-                        <Border Height="4" CornerRadius="2"
-                                Background="{DynamicResource ButtonBackgroundBrush}"
-                                VerticalAlignment="Center" />
-                        <Track x:Name="PART_Track">
+                    <Grid Background="Transparent">
+                        <Track x:Name="PART_Track" Height="28">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Grid Background="Transparent">
+                                                <Border Height="4"
+                                                        CornerRadius="2"
+                                                        Background="{DynamicResource AccentBrush}"
+                                                        VerticalAlignment="Center" />
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.DecreaseRepeatButton>
                             <Track.Thumb>
-                                <Thumb>
-                                    <Thumb.Style>
-                                        <Style TargetType="Thumb">
-                                            <Setter Property="Width" Value="18" />
-                                            <Setter Property="Height" Value="18" />
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="Thumb">
-                                                        <Ellipse Fill="{DynamicResource AccentBrush}"
-                                                                 Width="18" Height="18" />
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </Thumb.Style>
+                                <Thumb Width="18" Height="18" Cursor="Hand">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Grid Width="18" Height="18">
+                                                <Ellipse Fill="White"
+                                                         Stroke="{DynamicResource AccentBrush}"
+                                                         StrokeThickness="2" />
+                                                <Ellipse Width="6" Height="6"
+                                                         Fill="{DynamicResource AccentBrush}"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center" />
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
                                 </Thumb>
                             </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Grid Background="Transparent">
+                                                <Border Height="4"
+                                                        CornerRadius="2"
+                                                        Background="{DynamicResource TrackBackgroundBrush}"
+                                                        VerticalAlignment="Center" />
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.IncreaseRepeatButton>
                         </Track>
                     </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ComboBox Item Style -->
+    <Style x:Key="IntonacoComboBoxItem" TargetType="ComboBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource DefaultFont}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Bd"
+                            Background="Transparent"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            Margin="0,1">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource ButtonHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource AccentSoftBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ComboBox Style -->
+    <Style x:Key="IntonacoComboBox" TargetType="ComboBox">
+        <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontFamily" Value="{StaticResource DefaultFont}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+        <Setter Property="Padding" Value="10,6,30,6" />
+        <Setter Property="Height" Value="34" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource IntonacoComboBoxItem}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="ToggleButton"
+                                      Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      Focusable="False"
+                                      ClickMode="Press"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="Bd"
+                                            Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="{StaticResource ControlCornerRadius}">
+                                        <Path Data="M 0 0 L 4 4 L 8 0 Z"
+                                              Width="8" Height="5"
+                                              Fill="{DynamicResource TextSecondaryBrush}"
+                                              HorizontalAlignment="Right"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,10,0" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background"
+                                                    Value="{DynamicResource InputHoverBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Bd" Property="BorderBrush"
+                                                    Value="{DynamicResource AccentBrush}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+
+                        <ContentPresenter x:Name="ContentSite"
+                                          IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          Margin="{TemplateBinding Padding}"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center" />
+
+                        <TextBox x:Name="PART_EditableTextBox"
+                                 Style="{x:Null}"
+                                 Background="Transparent"
+                                 Foreground="{TemplateBinding Foreground}"
+                                 BorderThickness="0"
+                                 Margin="{TemplateBinding Padding}"
+                                 HorizontalAlignment="Stretch"
+                                 VerticalAlignment="Center"
+                                 Visibility="Hidden"
+                                 Focusable="True"
+                                 IsReadOnly="{TemplateBinding IsReadOnly}" />
+
+                        <Popup x:Name="PART_Popup"
+                               Placement="Bottom"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               PopupAnimation="Slide">
+                            <Grid MinWidth="{TemplateBinding ActualWidth}"
+                                  MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                  SnapsToDevicePixels="True">
+                                <Border Background="{DynamicResource CardBackgroundBrush}"
+                                        BorderBrush="{DynamicResource CardBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="4"
+                                        Margin="0,4,0,0">
+                                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  SnapsToDevicePixels="True">
+                                        <StackPanel IsItemsHost="True"
+                                                    KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="ContentSite" Property="Visibility" Value="Hidden" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -250,7 +500,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
-        <Setter Property="Padding" Value="16" />
+        <Setter Property="Padding" Value="18" />
     </Style>
 
 </ResourceDictionary>
