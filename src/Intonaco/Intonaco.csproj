@@ -13,7 +13,7 @@
     <Company>Intonaco</Company>
     <Copyright>Copyright © 2026 Intonaco Contributors</Copyright>
     <Authors>Intonaco Contributors</Authors>
-    <Version>1.0.3</Version>
+    <Version>1.1.0</Version>
     <!-- RuntimeIdentifier / SelfContained are supplied by publish commands
          (build.ps1, CI) so plain `dotnet build` / `dotnet test` stay RID-agnostic. -->
     <PublishSingleFile>true</PublishSingleFile>

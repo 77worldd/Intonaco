@@ -1,9 +1,16 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Intonaco.Core;
 using Microsoft.Win32;
@@ -18,6 +25,29 @@ namespace Intonaco.Views
         private readonly FullscreenDetector _fullscreenDetector;
         private readonly SystemEventMonitor _systemEvents;
         private PlayerWindow? _playerWindow;
+        private readonly ObservableCollection<RecentWallpaperItem> _recentWallpapers =
+            new ObservableCollection<RecentWallpaperItem>();
+        private string _fileInfoBase = string.Empty;
+
+        private static readonly HashSet<string> SupportedVideoExtensions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".mp4", ".m4v", ".webm", ".avi", ".wmv", ".mkv", ".mov"
+            };
+
+        private sealed class RecentWallpaperItem
+        {
+            public required string FullPath { get; init; }
+            public required string FileName { get; init; }
+            public required string Meta { get; init; }
+        }
+
+        [DllImport("dwmapi.dll", PreserveSig = true)]
+        private static extern int DwmSetWindowAttribute(
+            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
+
+        private const int DwmwaUseImmersiveDarkMode = 20;
+        private const int DwmwaUseImmersiveDarkModeLegacy = 19;
 
         private bool _isApplied;
         private bool _pausedByFullscreen;
@@ -42,6 +72,7 @@ namespace Intonaco.Views
             _systemEvents = new SystemEventMonitor();
 
             InitializeComponent();
+            RecentList.ItemsSource = _recentWallpapers;
 
             // Footer version comes from the assembly, so it can never drift
             // from the released build number.
@@ -79,7 +110,14 @@ namespace Intonaco.Views
 
             PauseFullscreenToggle.IsChecked = _settings.PauseOnFullscreen;
             StartWithWindowsToggle.IsChecked = StartupManager.IsRegistered;
+            StartMinimizedToggle.IsChecked = _settings.StartMinimized;
+            AutoPlayToggle.IsChecked = _settings.AutoPlay;
+            LoopToggle.IsChecked = _settings.LoopPlayback;
             VolumeSlider.Value = _settings.Volume * 100;
+            UpdateVolumeLabel();
+
+            SelectComboByTag(FitComboBox, _settings.WallpaperFit);
+            SelectSpeedCombo(_settings.PlaybackSpeed);
 
             // Set FPS combo
             foreach (ComboBoxItem item in FpsComboBox.Items)
@@ -104,9 +142,23 @@ namespace Intonaco.Views
             // Push persisted values into the player (fields only at this point;
             // the MediaElement is created on first ApplyWallpaper).
             _player.TargetFps = _settings.TargetFps;
+            _player.StretchMode = ParseFitMode(_settings.WallpaperFit);
+            _player.PlaybackSpeed = _settings.PlaybackSpeed;
+            _player.LoopPlayback = _settings.LoopPlayback;
             _player.Volume = _settings.Volume;
             _player.SetMute(_settings.IsMuted);
+            PreviewMedia.Stretch = _player.StretchMode;
+            PreviewMedia.SpeedRatio = _player.PlaybackSpeed;
             UpdateMuteButton();
+            RefreshRecentWallpapers();
+
+            if (!string.IsNullOrEmpty(_settings.LastWallpaperPath) &&
+                File.Exists(_settings.LastWallpaperPath))
+            {
+                UpdateFileInfo(_settings.LastWallpaperPath);
+                PlayPauseButton.IsEnabled = true;
+            }
+            UpdateDesktopStatus(_player.CurrentState);
 
             _suppressEvents = false;
         }
@@ -141,6 +193,7 @@ namespace Intonaco.Views
 
             _fullscreenDetector.Start();
             _systemEvents.Start();
+            UpdateTitleBarTheme();
 
             _placementTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _placementTimer.Tick += (_, _) =>
@@ -165,7 +218,42 @@ namespace Intonaco.Views
                 });
                 handled = true;
             }
+            else if (msg == 0x001A) // WM_SETTINGCHANGE (Windows appearance may have changed)
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, (Action)UpdateTitleBarTheme);
+            }
             return IntPtr.Zero;
+        }
+
+        private void UpdateTitleBarTheme()
+        {
+            try
+            {
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd == IntPtr.Zero)
+                    return;
+
+                bool useDark = true;
+                if (TryFindResource("WindowBackgroundColor") is Color color)
+                {
+                    double luminance = 0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B;
+                    useDark = luminance < 128;
+                }
+
+                int value = useDark ? 1 : 0;
+                int result = DwmSetWindowAttribute(
+                    hwnd, DwmwaUseImmersiveDarkMode, ref value, sizeof(int));
+                if (result != 0)
+                {
+                    // Early Windows 10 builds exposed the same setting as 19.
+                    DwmSetWindowAttribute(
+                        hwnd, DwmwaUseImmersiveDarkModeLegacy, ref value, sizeof(int));
+                }
+            }
+            catch
+            {
+                // Native caption styling is decorative; never fail the app for it.
+            }
         }
 
         private void InitializeSystemTray()
@@ -189,6 +277,165 @@ namespace Intonaco.Views
         }
 
         #region Wallpaper Management
+
+        private void OnWindowDragEnter(object sender, DragEventArgs e) => HandleDrag(e);
+
+        private void OnWindowDragOver(object sender, DragEventArgs e) => HandleDrag(e);
+
+        private void OnWindowDragLeave(object sender, DragEventArgs e)
+        {
+            Point position = e.GetPosition(this);
+            if (position.X < 0 || position.Y < 0 ||
+                position.X > ActualWidth || position.Y > ActualHeight)
+            {
+                DropOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void OnWindowDrop(object sender, DragEventArgs e)
+        {
+            DropOverlay.Visibility = Visibility.Collapsed;
+            if (TryGetDroppedVideo(e, out string? filePath) && filePath != null)
+            {
+                ApplyWallpaper(filePath);
+            }
+            else
+            {
+                ShowError("Drop a supported video file: MP4, WebM, MKV, MOV, AVI or WMV.");
+            }
+            e.Handled = true;
+        }
+
+        private void HandleDrag(DragEventArgs e)
+        {
+            bool hasVideo = TryGetDroppedVideo(e, out _);
+            e.Effects = hasVideo ? DragDropEffects.Copy : DragDropEffects.None;
+            DropOverlay.Visibility = hasVideo ? Visibility.Visible : Visibility.Collapsed;
+            e.Handled = true;
+        }
+
+        private static bool TryGetDroppedVideo(DragEventArgs e, out string? filePath)
+        {
+            filePath = null;
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop) ||
+                e.Data.GetData(DataFormats.FileDrop) is not string[] files)
+            {
+                return false;
+            }
+
+            filePath = files.FirstOrDefault(path =>
+                File.Exists(path) &&
+                SupportedVideoExtensions.Contains(System.IO.Path.GetExtension(path)));
+            return filePath != null;
+        }
+
+        private void OnRecentWallpaperClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.Tag is not string filePath)
+                return;
+
+            if (File.Exists(filePath))
+            {
+                ApplyWallpaper(filePath);
+                return;
+            }
+
+            _settings.RecentWallpaperPaths.RemoveAll(path =>
+                string.Equals(path, filePath, StringComparison.OrdinalIgnoreCase));
+            _settings.Save();
+            RefreshRecentWallpapers();
+            ShowError("That recent wallpaper no longer exists, so it was removed from the list.");
+        }
+
+        private void OnClearRecentWallpapers(object sender, RoutedEventArgs e)
+        {
+            _settings.RecentWallpaperPaths.Clear();
+            _settings.Save();
+            RefreshRecentWallpapers();
+        }
+
+        private void RefreshRecentWallpapers()
+        {
+            _settings.Normalize();
+            _recentWallpapers.Clear();
+
+            foreach (string path in _settings.RecentWallpaperPaths.Where(File.Exists))
+            {
+                _recentWallpapers.Add(new RecentWallpaperItem
+                {
+                    FullPath = path,
+                    FileName = System.IO.Path.GetFileName(path),
+                    Meta = BuildRecentMeta(path)
+                });
+            }
+
+            bool hasRecents = _recentWallpapers.Count > 0;
+            RecentEmptyText.Visibility = hasRecents ? Visibility.Collapsed : Visibility.Visible;
+            ClearRecentsButton.IsEnabled = hasRecents;
+        }
+
+        private string BuildRecentMeta(string path)
+        {
+            string meta = $"{System.IO.Path.GetExtension(path).TrimStart('.').ToUpperInvariant()} • {FormatFileSize(path)}";
+
+            if (string.Equals(path, _player.CurrentFilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_player.NaturalVideoWidth > 0 && _player.NaturalVideoHeight > 0)
+                    meta += $" • {_player.NaturalVideoWidth}×{_player.NaturalVideoHeight}";
+                if (_player.Duration > TimeSpan.Zero)
+                    meta += $" • {FormatDuration(_player.Duration)}";
+            }
+
+            return meta;
+        }
+
+        private void OnOpenFileLocation(object sender, RoutedEventArgs e)
+        {
+            string? path = _player.CurrentFilePath ?? _settings.LastWallpaperPath;
+            try
+            {
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
+                    {
+                        UseShellExecute = true
+                    });
+                }
+                else if (!string.IsNullOrEmpty(path) &&
+                         Directory.Exists(System.IO.Path.GetDirectoryName(path)))
+                {
+                    Process.Start(new ProcessStartInfo("explorer.exe",
+                        $"\"{System.IO.Path.GetDirectoryName(path)}\"")
+                    {
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowError($"Could not open the file location: {ex.Message}");
+            }
+        }
+
+        private void OnOpenLogs(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string? folder = System.IO.Path.GetDirectoryName(DebugLog.LogFilePath);
+                if (!string.IsNullOrEmpty(folder))
+                {
+                    Directory.CreateDirectory(folder);
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"")
+                    {
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowError($"Could not open the log folder: {ex.Message}");
+            }
+        }
 
         private void OnChooseFile(object sender, RoutedEventArgs e)
         {
@@ -251,15 +498,19 @@ namespace Intonaco.Views
             _player.SetMute(_settings.IsMuted);
             _player.Volume = _settings.Volume;
             _player.TargetFps = _settings.TargetFps;
+            _player.StretchMode = ParseFitMode(_settings.WallpaperFit);
+            _player.PlaybackSpeed = _settings.PlaybackSpeed;
+            _player.LoopPlayback = _settings.LoopPlayback;
             _isApplied = true;
 
-            // Update settings
-            _settings.LastWallpaperPath = filePath;
+            // Update settings and recents
+            _settings.RememberWallpaper(filePath);
             _settings.Save();
 
             // Update UI
             UpdateFileInfo(filePath);
             UpdatePreview(filePath);
+            RefreshRecentWallpapers();
         }
 
         private void StopWallpaper()
@@ -283,23 +534,52 @@ namespace Intonaco.Views
         private void UpdateFileInfo(string filePath)
         {
             FileNameText.Text = Path.GetFileName(filePath);
+            FileNameText.ToolTip = filePath;
 
             try
             {
                 var fi = new FileInfo(filePath);
-                string size = fi.Length switch
-                {
-                    < 1024 => $"{fi.Length} B",
-                    < 1048576 => $"{fi.Length / 1024.0:F1} KB",
-                    < 1073741824 => $"{fi.Length / 1048576.0:F1} MB",
-                    _ => $"{fi.Length / 1073741824.0:F2} GB"
-                };
-                FileInfoText.Text = $"{fi.Extension.TrimStart('.').ToUpperInvariant()} • {size}";
+                _fileInfoBase =
+                    $"{fi.Extension.TrimStart('.').ToUpperInvariant()} • {FormatFileSize(fi.Length)}";
+                FileInfoText.Text = _fileInfoBase;
+                OpenFolderButton.IsEnabled = fi.Exists;
             }
             catch
             {
+                _fileInfoBase = string.Empty;
                 FileInfoText.Text = "";
+                OpenFolderButton.IsEnabled = false;
             }
+        }
+
+        private static string FormatFileSize(string filePath)
+        {
+            try
+            {
+                return FormatFileSize(new FileInfo(filePath).Length);
+            }
+            catch
+            {
+                return "Unknown size";
+            }
+        }
+
+        private static string FormatFileSize(long length)
+        {
+            return length switch
+            {
+                < 1024 => $"{length} B",
+                < 1048576 => $"{length / 1024.0:F1} KB",
+                < 1073741824 => $"{length / 1048576.0:F1} MB",
+                _ => $"{length / 1073741824.0:F2} GB"
+            };
+        }
+
+        private static string FormatDuration(TimeSpan duration)
+        {
+            return duration.TotalHours >= 1
+                ? duration.ToString(@"h\:mm\:ss")
+                : duration.ToString(@"m\:ss");
         }
 
         private void UpdatePreview(string filePath)
@@ -307,6 +587,8 @@ namespace Intonaco.Views
             try
             {
                 PreviewMedia.Source = new Uri(filePath, UriKind.Absolute);
+                PreviewMedia.Stretch = ParseFitMode(_settings.WallpaperFit);
+                PreviewMedia.SpeedRatio = _player.PlaybackSpeed;
                 PreviewMedia.IsMuted = true;
                 PreviewMedia.Play();
                 PreviewMedia.Visibility = Visibility.Visible;
@@ -330,6 +612,7 @@ namespace Intonaco.Views
 
             PreviewMedia.Visibility = Visibility.Collapsed;
             PreviewPlaceholder.Visibility = Visibility.Visible;
+            PreviewStatusText.Text = "No video";
         }
 
         #endregion
@@ -361,18 +644,45 @@ namespace Intonaco.Views
 
         private void OnToggleMute(object sender, RoutedEventArgs e)
         {
+            bool willUnmute = _player.IsMuted || _player.Volume <= 0.001;
             _player.ToggleMute();
+            if (willUnmute && _player.IsMuted)
+            {
+                // Volume was effectively muted by the slider rather than the
+                // player's mute flag; ToggleMute flipped the flag the wrong way.
+                _player.SetMute(false);
+            }
             _settings.IsMuted = _player.IsMuted;
-            _settings.Save();
+
+            if (willUnmute && VolumeSlider.Value <= 0)
+            {
+                VolumeSlider.Value = 50; // OnVolumeChanged saves the volume.
+            }
+            else
+            {
+                _settings.Save();
+            }
             UpdateMuteButton();
         }
 
         private void OnVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
+            UpdateVolumeLabel();
             if (_suppressEvents) return;
+
             _player.Volume = e.NewValue / 100.0;
+            if (e.NewValue > 0 && _player.IsMuted)
+                _player.SetMute(false);
+
             _settings.Volume = _player.Volume;
+            _settings.IsMuted = _player.IsMuted;
             _settings.Save();
+            UpdateMuteButton();
+        }
+
+        private void UpdateVolumeLabel()
+        {
+            VolumeText.Text = $"{Math.Round(VolumeSlider.Value):0}%";
         }
 
         #endregion
@@ -412,6 +722,103 @@ namespace Intonaco.Views
                 _player.TargetFps = fps;
                 _settings.Save();
             }
+        }
+
+        private void OnFitChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_suppressEvents) return;
+
+            if (FitComboBox.SelectedItem is ComboBoxItem item && item.Tag is string fit)
+            {
+                _settings.WallpaperFit = AppSettings.NormalizeFit(fit);
+                _player.StretchMode = ParseFitMode(_settings.WallpaperFit);
+                PreviewMedia.Stretch = _player.StretchMode;
+                _settings.Save();
+            }
+        }
+
+        private void OnSpeedChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_suppressEvents) return;
+
+            if (SpeedComboBox.SelectedItem is ComboBoxItem item &&
+                item.Tag is string tag &&
+                double.TryParse(tag, NumberStyles.Float, CultureInfo.InvariantCulture, out double speed))
+            {
+                _settings.PlaybackSpeed = speed;
+                _player.PlaybackSpeed = speed;
+                PreviewMedia.SpeedRatio = speed;
+                _settings.Save();
+            }
+        }
+
+        private void OnLoopChanged(object sender, RoutedEventArgs e)
+        {
+            if (_suppressEvents) return;
+            _settings.LoopPlayback = LoopToggle.IsChecked == true;
+            _player.LoopPlayback = _settings.LoopPlayback;
+            _settings.Save();
+        }
+
+        private void OnStartMinimizedChanged(object sender, RoutedEventArgs e)
+        {
+            if (_suppressEvents) return;
+            _settings.StartMinimized = StartMinimizedToggle.IsChecked == true;
+            _settings.Save();
+        }
+
+        private void OnAutoPlayChanged(object sender, RoutedEventArgs e)
+        {
+            if (_suppressEvents) return;
+            _settings.AutoPlay = AutoPlayToggle.IsChecked == true;
+            _settings.Save();
+        }
+
+        private static void SelectComboByTag(ComboBox comboBox, string expectedTag)
+        {
+            foreach (ComboBoxItem item in comboBox.Items)
+            {
+                if (item.Tag is string tag &&
+                    string.Equals(tag, expectedTag, StringComparison.OrdinalIgnoreCase))
+                {
+                    comboBox.SelectedItem = item;
+                    return;
+                }
+            }
+        }
+
+        private void SelectSpeedCombo(double speed)
+        {
+            ComboBoxItem? closest = null;
+            double closestDistance = double.MaxValue;
+
+            foreach (ComboBoxItem item in SpeedComboBox.Items)
+            {
+                if (item.Tag is string tag &&
+                    double.TryParse(tag, NumberStyles.Float, CultureInfo.InvariantCulture,
+                        out double candidate))
+                {
+                    double distance = Math.Abs(candidate - speed);
+                    if (distance < closestDistance)
+                    {
+                        closestDistance = distance;
+                        closest = item;
+                    }
+                }
+            }
+
+            if (closest != null)
+                SpeedComboBox.SelectedItem = closest;
+        }
+
+        private static Stretch ParseFitMode(string? fit)
+        {
+            return AppSettings.NormalizeFit(fit) switch
+            {
+                "Fit" => Stretch.Uniform,
+                "Stretch" => Stretch.Fill,
+                _ => Stretch.UniformToFill
+            };
         }
 
         #endregion
@@ -472,7 +879,51 @@ namespace Intonaco.Views
                 }
 
                 UpdateMuteButton();
+                UpdateDesktopStatus(state);
             });
+        }
+
+        private void UpdateDesktopStatus(WallpaperPlayer.PlaybackState state)
+        {
+            string text;
+            string previewText;
+            string dotBrushKey;
+            string pillBrushKey;
+
+            switch (state)
+            {
+                case WallpaperPlayer.PlaybackState.Playing:
+                    text = "Desktop live";
+                    previewText = "On desktop";
+                    dotBrushKey = "SuccessBrush";
+                    pillBrushKey = "SuccessSoftBrush";
+                    break;
+                case WallpaperPlayer.PlaybackState.Paused:
+                    text = "Paused";
+                    previewText = "Paused";
+                    dotBrushKey = "TextSecondaryBrush";
+                    pillBrushKey = "SubtleBackgroundBrush";
+                    break;
+                case WallpaperPlayer.PlaybackState.Error:
+                    text = "Needs attention";
+                    previewText = "Error";
+                    dotBrushKey = "ErrorBrush";
+                    pillBrushKey = "ErrorSoftBrush";
+                    break;
+                default:
+                    bool hasWallpaper = !string.IsNullOrEmpty(_settings.LastWallpaperPath) &&
+                                        File.Exists(_settings.LastWallpaperPath);
+                    text = hasWallpaper ? "Ready" : "No wallpaper";
+                    previewText = hasWallpaper ? "Ready" : "No video";
+                    dotBrushKey = "TextSecondaryBrush";
+                    pillBrushKey = "SubtleBackgroundBrush";
+                    break;
+            }
+
+            DesktopStatusText.Text = text;
+            PreviewStatusText.Text = previewText;
+            DesktopStatusDot.Fill = FindResource(dotBrushKey) as Brush;
+            DesktopStatusPill.Background = FindResource(pillBrushKey) as Brush;
         }
 
         private void OnPlayerError(string message)
@@ -484,15 +935,14 @@ namespace Intonaco.Views
         {
             Dispatcher.BeginInvoke(() =>
             {
+                string info = _fileInfoBase;
+                if (_player.NaturalVideoWidth > 0 && _player.NaturalVideoHeight > 0)
+                    info += $" • {_player.NaturalVideoWidth}×{_player.NaturalVideoHeight}";
                 if (duration > TimeSpan.Zero)
-                {
-                    string durationStr = duration.TotalHours >= 1
-                        ? duration.ToString(@"h\:mm\:ss")
-                        : duration.ToString(@"m\:ss");
+                    info += $" • {FormatDuration(duration)}";
 
-                    if (!string.IsNullOrEmpty(FileInfoText.Text))
-                        FileInfoText.Text += $" • {durationStr}";
-                }
+                FileInfoText.Text = info;
+                RefreshRecentWallpapers();
             });
         }
 
@@ -588,6 +1038,8 @@ namespace Intonaco.Views
                 _settings.Theme = theme;
                 _settings.Save();
                 (Application.Current as App)?.ApplyTheme(theme);
+                UpdateTitleBarTheme();
+                UpdateDesktopStatus(_player.CurrentState);
             }
         }
 
@@ -658,7 +1110,8 @@ namespace Intonaco.Views
 
         private void UpdateMuteButton()
         {
-            if (_player.IsMuted)
+            bool effectivelyMuted = _player.IsMuted || _player.Volume <= 0.001;
+            if (effectivelyMuted)
             {
                 MuteButton.Content = "\uE74F"; // Muted icon
                 MuteButton.ToolTip = "Unmute";

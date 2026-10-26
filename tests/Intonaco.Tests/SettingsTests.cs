@@ -14,9 +14,13 @@ namespace Intonaco.Tests
             Assert.True(settings.IsMuted);
             Assert.Equal(0.0, settings.Volume);
             Assert.Equal(30, settings.TargetFps);
+            Assert.Equal("Fill", settings.WallpaperFit);
+            Assert.Equal(1.0, settings.PlaybackSpeed);
+            Assert.True(settings.LoopPlayback);
             Assert.True(settings.PauseOnFullscreen);
             Assert.False(settings.StartWithWindows);
             Assert.Null(settings.LastWallpaperPath);
+            Assert.Empty(settings.RecentWallpaperPaths);
             Assert.Equal("System", settings.Theme);
         }
 
@@ -35,6 +39,48 @@ namespace Intonaco.Tests
             // After load validation
             settings.TargetFps = Math.Clamp(settings.TargetFps, 1, 60);
             Assert.InRange(settings.TargetFps, 1, 60);
+        }
+
+        [Fact]
+        public void Settings_Normalize_ClampsAndCanonicalizesValues()
+        {
+            var settings = new AppSettings
+            {
+                Volume = 4.0,
+                TargetFps = -3,
+                PlaybackSpeed = 99.0,
+                WallpaperFit = "fit",
+                Theme = "Sepia"
+            };
+
+            settings.Normalize();
+
+            Assert.Equal(1.0, settings.Volume);
+            Assert.Equal(1, settings.TargetFps);
+            Assert.Equal(2.0, settings.PlaybackSpeed);
+            Assert.Equal("Fit", settings.WallpaperFit);
+            Assert.Equal("System", settings.Theme);
+        }
+
+        [Fact]
+        public void Settings_RememberWallpaper_DeduplicatesAndCapsRecents()
+        {
+            var settings = new AppSettings();
+
+            for (int i = 0; i < 8; i++)
+                settings.RememberWallpaper($@"C:\Videos\wallpaper-{i}.mp4");
+
+            // Re-applying an older video moves it to the front without duplicating it.
+            settings.RememberWallpaper(@"C:\Videos\wallpaper-3.mp4");
+
+            Assert.Equal(6, settings.RecentWallpaperPaths.Count);
+            Assert.Equal(@"C:\Videos\wallpaper-3.mp4", settings.RecentWallpaperPaths[0]);
+            Assert.Equal(@"C:\Videos\wallpaper-3.mp4", settings.LastWallpaperPath);
+            Assert.Equal(
+                settings.RecentWallpaperPaths.Count,
+                new System.Collections.Generic.HashSet<string>(
+                    settings.RecentWallpaperPaths,
+                    System.StringComparer.OrdinalIgnoreCase).Count);
         }
     }
 
@@ -77,6 +123,28 @@ namespace Intonaco.Tests
             Assert.Equal(60, player.TargetFps);
             player.TargetFps = 0;
             Assert.Equal(1, player.TargetFps);
+            player.Dispose();
+        }
+
+        [WpfFact]
+        public void Player_PlaybackSpeedClampAndDisplayOptions()
+        {
+            var player = new WallpaperPlayer();
+
+            player.PlaybackSpeed = 99.0;
+            Assert.Equal(2.0, player.PlaybackSpeed);
+            player.PlaybackSpeed = 0.0;
+            Assert.Equal(0.25, player.PlaybackSpeed);
+
+            player.StretchMode = System.Windows.Media.Stretch.Uniform;
+            Assert.Equal(System.Windows.Media.Stretch.Uniform, player.StretchMode);
+
+            Assert.True(player.LoopPlayback);
+            player.LoopPlayback = false;
+            Assert.False(player.LoopPlayback);
+            Assert.Equal(0, player.NaturalVideoWidth);
+            Assert.Equal(0, player.NaturalVideoHeight);
+
             player.Dispose();
         }
 
