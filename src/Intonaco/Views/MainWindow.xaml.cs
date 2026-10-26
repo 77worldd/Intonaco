@@ -48,6 +48,8 @@ namespace Intonaco.Views
 
         private const int DwmwaUseImmersiveDarkMode = 20;
         private const int DwmwaUseImmersiveDarkModeLegacy = 19;
+        private const int DwmwaCaptionColor = 35;
+        private const int DwmwaTextColor = 36;
 
         private bool _isApplied;
         private bool _pausedByFullscreen;
@@ -229,16 +231,24 @@ namespace Intonaco.Views
         {
             try
             {
-                IntPtr hwnd = new WindowInteropHelper(this).Handle;
-                if (hwnd == IntPtr.Zero)
-                    return;
-
                 bool useDark = true;
                 if (TryFindResource("WindowBackgroundColor") is Color color)
                 {
                     double luminance = 0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B;
                     useDark = luminance < 128;
                 }
+
+                // The supplied primary and transparent masters differ in the
+                // small lower detail; use each on its intended surface.
+                string logoFile = useDark
+                    ? "intonaco-mark-dark.png"
+                    : "intonaco-mark-light.png";
+                BrandLogoImage.Source = new System.Windows.Media.Imaging.BitmapImage(
+                    new Uri($"pack://application:,,,/Assets/{logoFile}", UriKind.Absolute));
+
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd == IntPtr.Zero)
+                    return;
 
                 int value = useDark ? 1 : 0;
                 int result = DwmSetWindowAttribute(
@@ -248,6 +258,23 @@ namespace Intonaco.Views
                     // Early Windows 10 builds exposed the same setting as 19.
                     DwmSetWindowAttribute(
                         hwnd, DwmwaUseImmersiveDarkModeLegacy, ref value, sizeof(int));
+                }
+
+                // Windows 11 can also match the caption itself to the app
+                // surface. Unsupported builds simply return an error, which
+                // is safe to ignore.
+                if (TryFindResource("WindowBackgroundColor") is Color background)
+                {
+                    int captionColor = background.R | (background.G << 8) | (background.B << 16);
+                    DwmSetWindowAttribute(
+                        hwnd, DwmwaCaptionColor, ref captionColor, sizeof(int));
+                }
+
+                if (TryFindResource("TextPrimaryColor") is Color foreground)
+                {
+                    int textColor = foreground.R | (foreground.G << 8) | (foreground.B << 16);
+                    DwmSetWindowAttribute(
+                        hwnd, DwmwaTextColor, ref textColor, sizeof(int));
                 }
             }
             catch
@@ -888,27 +915,23 @@ namespace Intonaco.Views
             string text;
             string previewText;
             string dotBrushKey;
-            string pillBrushKey;
 
             switch (state)
             {
                 case WallpaperPlayer.PlaybackState.Playing:
-                    text = "Desktop live";
+                    text = "Playing on desktop";
                     previewText = "On desktop";
                     dotBrushKey = "SuccessBrush";
-                    pillBrushKey = "SuccessSoftBrush";
                     break;
                 case WallpaperPlayer.PlaybackState.Paused:
                     text = "Paused";
                     previewText = "Paused";
                     dotBrushKey = "TextSecondaryBrush";
-                    pillBrushKey = "SubtleBackgroundBrush";
                     break;
                 case WallpaperPlayer.PlaybackState.Error:
                     text = "Needs attention";
                     previewText = "Error";
                     dotBrushKey = "ErrorBrush";
-                    pillBrushKey = "ErrorSoftBrush";
                     break;
                 default:
                     bool hasWallpaper = !string.IsNullOrEmpty(_settings.LastWallpaperPath) &&
@@ -916,14 +939,12 @@ namespace Intonaco.Views
                     text = hasWallpaper ? "Ready" : "No wallpaper";
                     previewText = hasWallpaper ? "Ready" : "No video";
                     dotBrushKey = "TextSecondaryBrush";
-                    pillBrushKey = "SubtleBackgroundBrush";
                     break;
             }
 
             DesktopStatusText.Text = text;
             PreviewStatusText.Text = previewText;
             DesktopStatusDot.Fill = FindResource(dotBrushKey) as Brush;
-            DesktopStatusPill.Background = FindResource(pillBrushKey) as Brush;
         }
 
         private void OnPlayerError(string message)
