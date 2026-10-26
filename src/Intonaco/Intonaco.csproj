@@ -13,11 +13,21 @@
     <Company>Intonaco</Company>
     <Copyright>Copyright © 2026 Intonaco Contributors</Copyright>
     <Authors>Intonaco Contributors</Authors>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <!-- RuntimeIdentifier / SelfContained are supplied by publish commands
          (build.ps1, CI) so plain `dotnet build` / `dotnet test` stay RID-agnostic. -->
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- The UI ships in English; avoid carrying every runtime satellite
+         assembly in self-contained downloads/installers. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Explicit workstation GC keeps the single UI process biased toward
+         returning memory instead of retaining server-sized heaps. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Nullable>enable</Nullable>
     <TrimMode>partial</TrimMode>
