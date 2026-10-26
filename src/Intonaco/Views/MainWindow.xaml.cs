@@ -38,6 +38,11 @@ namespace Intonaco.Views
 
             InitializeComponent();
 
+            // Footer version comes from the assembly, so it can never drift
+            // from the released build number.
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            VersionText.Text = version != null ? $"v{version.Major}.{version.Minor}.{version.Build}" : "";
+
             LoadSettings();
             WireEvents();
             InitializeSystemTray();
@@ -215,7 +220,12 @@ namespace Intonaco.Views
             // Attach to desktop
             if (!_desktop.Attach(_playerWindow))
             {
-                ShowError("Failed to attach to desktop. Try restarting Explorer.");
+                string reason = _desktop.LastError ?? "Failed to attach to desktop.";
+                DebugLog.Write($"ApplyWallpaper: attach failed for '{filePath}': {reason}");
+                // Close the (already shown) player window — otherwise it stays
+                // on screen as a floating black rectangle.
+                StopWallpaper();
+                ShowError($"{reason} Details logged to %LocalAppData%\\Intonaco\\debug.log");
                 return;
             }
 
