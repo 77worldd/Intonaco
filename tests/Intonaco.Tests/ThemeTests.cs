@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.IO.Packaging;
 using System.Linq;
+using System.Net;
 using System.Resources;
 using System.Windows;
 using System.Windows.Controls;
@@ -20,6 +21,9 @@ namespace Intonaco.Tests
             // PackUriHelper first to register the pack URI parser. Without
             // this, System.Uri treats "application:,,," as an invalid port.
             _ = PackUriHelper.UriSchemePack;
+            _ = WebRequest.RegisterPrefix(
+                PackUriHelper.UriSchemePack,
+                new PackWebRequestFactory());
 
             return new ResourceDictionary
             {
