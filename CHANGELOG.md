@@ -4,6 +4,39 @@ All notable changes to Intonaco are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-10-26
+
+Hotfix for "Failed to attach to desktop" on current Windows 11 builds
+(reported against v1.0.0 with a 1920x1080 MP4; restarting Explorer did
+not help because the lookup itself was too narrow).
+
+### Fixed
+
+- **Desktop attach (`DesktopIntegration`) rewritten for modern Explorer
+  layouts.** v1.0.0 tried only two lookups with a single `0x052C` spawn
+  variant. v1.0.1 sends all known spawn variants, enumerates top-level
+  windows, and tries candidates in order — classic shell-host sibling,
+  WorkerW child of Progman (newer Windows 11 / Spotlight layouts),
+  WorkerW after Progman, any icon-less WorkerW, and finally Progman
+  itself with the player Z-ordered to the bottom — retrying briefly
+  while Explorer creates the WorkerW asynchronously, and verifying
+  `SetParent` actually took effect before reporting success.
+- Player window conversion now clears `WS_POPUP` (mutually exclusive
+  with `WS_CHILD`) and uses `Get/SetWindowLongPtr` on 64-bit Windows.
+- A failed attach no longer leaves the black player window floating on
+  screen; it is closed, and the real failure reason is shown.
+- Footer version now comes from the assembly version (was hardcoded).
+
+### Added
+
+- Diagnostic logging to `%LocalAppData%\Intonaco\debug.log`: every
+  attach attempt records the Progman/WorkerW windows found, the
+  candidates tried and Win32 errors — attach this file to bug reports.
+- Direct single-file download in releases:
+  `Intonaco-v<version>-win-x64.exe` (self-contained, no unzip needed),
+  included in `SHA256SUMS.txt`.
+- Unit tests for WorkerW candidate ordering.
+
 ## [1.0.0] — 2026-10-26
 
 First official release.
@@ -77,4 +110,5 @@ First official release.
 - README: fixed the placeholder clone URL, an unclosed code fence, and the
   flattened Usage/Performance tables.
 
+[1.0.1]: https://github.com/77worldd/Intonaco/releases/tag/v1.0.1
 [1.0.0]: https://github.com/77worldd/Intonaco/releases/tag/v1.0.0

@@ -50,7 +50,7 @@ For best performance, use H.264 MP4 files at your screen resolution or lower.
 
 ### Portable (recommended)
 
-1. Download a zip from [Releases](https://github.com/77worldd/Intonaco/releases):
+1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.0.1-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
    - `Intonaco-v1.0.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites (≈60–80 MB)
    - `Intonaco-v1.0.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
 2. Extract to any folder
@@ -156,6 +156,13 @@ Intonaco.exe (single process)
 
 - This can happen if Intonaco fails to find the correct WorkerW window
 - Restart Explorer: open Task Manager → find Windows Explorer → Restart
+
+### "Failed to attach to desktop"
+
+Intonaco logs every attach attempt to `%LocalAppData%\Intonaco\debug.log`
+(press `Win+R`, paste the path, Enter). If applying a wallpaper still fails
+after restarting Explorer, please open an issue and attach that file — it
+lists the exact desktop windows found on your Windows build.
 
 ### Something crashed
 
