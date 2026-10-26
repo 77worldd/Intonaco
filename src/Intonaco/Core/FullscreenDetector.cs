@@ -61,11 +61,11 @@ namespace Intonaco.Core
         public event Action<bool>? FullscreenStateChanged;
         public bool IsFullscreenActive => _isFullscreen;
         public bool IsEnabled { get; set; } = true;
+        public bool IsRunning => _timer?.IsEnabled == true;
 
         public void Start()
         {
-            if (_disposed) return;
-            Stop();
+            if (_disposed || _timer != null) return;
 
             _timer = new DispatcherTimer(DispatcherPriority.Background)
             {

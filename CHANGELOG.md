@@ -4,6 +4,68 @@ All notable changes to Intonaco are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-10-26
+
+Performance and installation release. The user-verified desktop
+integration from v1.0.3 remains unchanged.
+
+### Added
+
+- **Real Windows installer:** `Intonaco-v1.3.0-win-x64-setup.exe` is a
+  self-contained, per-user Inno Setup installer. It needs no .NET or
+  administrator account, creates a Start Menu shortcut, offers an
+  optional desktop shortcut, registers a normal uninstaller, and can
+  launch Intonaco after setup. Upgrades, reinstalls and uninstall keep
+  `%LocalAppData%\Intonaco` settings and logs intact.
+- Reproducible installer tooling under `installer/`, including an
+  automated silent install → launch → reinstall → uninstall smoke test
+  that runs in CI and again before a release is published.
+- `tools/Measure-IntonacoPerformance.ps1` for repeatable RAM/CPU samples,
+  plus transition-only process footprint entries in `debug.log`.
+
+### Changed
+
+- **Pause now behaves like a static wallpaper.** Intonaco captures the
+  current desktop frame, displays that one bitmap, then closes the
+  Media Foundation source so decoder, source-reader and frame-queue
+  buffers are released. Resume reopens the same file, seeks to the
+  paused position, and removes the static frame only after new frames
+  render. The same suspension is used for user, tray, fullscreen and
+  system-event pauses; Fit/display changes can quietly recapture the
+  static frame and suspend again.
+- **The in-app preview no longer decodes when it cannot help.** It now
+  closes its separate media pipeline when playback pauses, the main
+  window is minimized/hidden in the tray, playback stops, or the app
+  exits. While paused it reuses the desktop player's static frame.
+- Background work is gated by need: fullscreen polling runs only while
+  playing (or while waiting to resume from a fullscreen pause), the
+  desktop-placement check runs only while a wallpaper is applied, and
+  its interval relaxes from 5 seconds to 15 seconds for a static frame.
+- Volume changes are saved after a short debounce instead of writing
+  settings for every slider movement; the pending save is flushed when
+  the window hides or exits.
+- The installer payload uses a loose self-contained ReadyToRun publish,
+  workstation GC settings are explicit, and self-contained outputs omit
+  unused runtime satellite-language assemblies.
+
+### Fixed
+
+- Pausing previously left both the desktop `MediaElement` pipeline and
+  the independent preview pipeline allocated; the preview could keep
+  decoding even though the wallpaper said “Paused.”
+- A system pause/resume event could claim ownership of a wallpaper the
+  user had already paused manually.
+- The README's old, unrealistically low RAM estimates were replaced with
+  a qualitative state table and a repeatable measurement procedure.
+
+### Added tests
+
+- A hosted WPF media-lifecycle test generates a deterministic video and
+  proves Play opens a pipeline, Pause captures a frame and closes that
+  pipeline, Resume reopens it, and Stop releases both source and frame.
+- Paused-frame bounds, player host composition, timer idempotence and
+  process-snapshot tests, plus the installer smoke test described above.
+
 ## [1.2.0] — 2026-10-26
 
 Brand and interface refinement release. The user-verified desktop
