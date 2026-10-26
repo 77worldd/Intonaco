@@ -51,7 +51,7 @@ $uninstaller = Join-Path $InstallDir "unins000.exe"
 
 $programsFolder = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
 $desktopFolder = [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory)
-$startShortcut = Join-Path $programsFolder "Intonaco\Intonaco.lnk"
+$startShortcut = Join-Path $programsFolder "Intonaco.lnk"
 $desktopShortcut = Join-Path $desktopFolder "Intonaco.lnk"
 
 $settingsDir = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) "Intonaco"
