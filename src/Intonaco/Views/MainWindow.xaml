@@ -260,6 +260,7 @@
                        TextTrimming="CharacterEllipsis" />
 
             <TextBlock Grid.Column="1"
+                       x:Name="VersionText"
                        Text="v1.0.0"
                        FontSize="{StaticResource FontSizeCaption}"
                        Foreground="{DynamicResource TextSecondaryBrush}"
