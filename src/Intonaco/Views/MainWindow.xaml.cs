@@ -28,6 +28,11 @@ namespace Intonaco.Views
         // Explorer restart detection
         private uint _shellRestartMessage;
 
+        // Periodic desktop-placement self-check (Explorer can reshuffle
+        // its desktop windows and cover the player, e.g. after a
+        // wallpaper change recreates the system WorkerW).
+        private DispatcherTimer? _placementTimer;
+
         public MainWindow()
         {
             _settings = AppSettings.Load();
@@ -136,6 +141,14 @@ namespace Intonaco.Views
 
             _fullscreenDetector.Start();
             _systemEvents.Start();
+
+            _placementTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _placementTimer.Tick += (_, _) =>
+            {
+                if (_isApplied)
+                    _desktop.EnsurePlacement();
+            };
+            _placementTimer.Start();
         }
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -602,6 +615,7 @@ namespace Intonaco.Views
             }
 
             // Actual shutdown
+            _placementTimer?.Stop();
             _fullscreenDetector.Dispose();
             _systemEvents.Dispose();
             StopWallpaper();
