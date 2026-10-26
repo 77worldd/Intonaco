@@ -77,9 +77,13 @@ jobs:
           Compress-Archive -Path publish/framework-dependent/* -DestinationPath $fd
           Compress-Archive -Path publish/self-contained/* -DestinationPath $sc
 
-          $lines = foreach ($zip in @($fd, $sc)) {
-            $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-            "$hash  $(Split-Path $zip -Leaf)"
+          # Direct .exe download (the self-contained single file, no unzip needed).
+          $exe = "release/Intonaco-v$version-win-x64.exe"
+          Copy-Item publish/self-contained/Intonaco.exe $exe
+
+          $lines = foreach ($file in @($fd, $sc, $exe)) {
+            $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $(Split-Path $file -Leaf)"
           }
           $lines | Set-Content release/SHA256SUMS.txt -Encoding ascii
           Get-ChildItem release | Format-Table Name, Length
@@ -96,13 +100,15 @@ jobs:
             ### Downloads
             | File | Use when |
             | --- | --- |
-            | `Intonaco-v${{ steps.version.outputs.version }}-win-x64-self-contained.zip` | You want zero prerequisites — runs on any Windows 10 1903+/11 x64 PC |
+            | `Intonaco-v${{ steps.version.outputs.version }}-win-x64.exe` | **Easiest** — a single executable: download it and double-click, no unzip, no prerequisites |
+            | `Intonaco-v${{ steps.version.outputs.version }}-win-x64-self-contained.zip` | Same self-contained build as a zip (includes LICENSE/notices) |
             | `Intonaco-v${{ steps.version.outputs.version }}-win-x64-framework-dependent.zip` | You already have the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (much smaller download) |
 
-            Extract anywhere and run `Intonaco.exe`. Verify downloads with `SHA256SUMS.txt`.
+            For the zips: extract anywhere and run `Intonaco.exe`. Verify downloads with `SHA256SUMS.txt`.
 
             See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/CHANGELOG.md) for everything in this release, and [docs/VERIFICATION.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/docs/VERIFICATION.md) for the on-device test checklist.
           files: |
             release/*.zip
+            release/*.exe
             release/SHA256SUMS.txt
           fail_on_unmatched_files: true
