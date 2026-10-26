@@ -4,6 +4,46 @@ All notable changes to Intonaco are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-10-26
+
+Fix for v1.0.1 reporting "Playing" while the actual desktop never
+changed (reported on Windows 11 26H2, OS Build 26300.9711, with the
+same 1920x1080 MP4).
+
+### Fixed
+
+- **Windows 11 24H2+ "raised desktop" support.** On these builds
+  Progman is created with `WS_EX_NOREDIRECTIONBITMAP`, the icon view
+  is a layered child of Progman, and Explorer's wallpaper is a WorkerW
+  child below it — a plain child window parented there (v1.0.1's
+  approach) is never composited by DWM: present and playing, but
+  invisible. Following Microsoft's guidance to wallpaper apps,
+  Intonaco now detects the raised desktop from the window tree and
+  Progman's extended style and makes the player a `WS_EX_LAYERED`
+  child of Progman with constant alpha `0xFF`
+  (`SetLayeredWindowAttributes`, so WPF/Media Foundation presents stay
+  hardware accelerated), z-ordered directly under `SHELLDLL_DefView`
+  and above the system WorkerW. The classic top-level-WorkerW path is
+  unchanged for Windows 10 / Windows 11 23H2 and earlier.
+- The `0x052C` desktop-split request is now sent once as `(0xD, 1)`
+  and only when the window tree shows no wallpaper layer yet — extra
+  variants sent by v1.0.1 could undo the layer that was just created.
+- A full-screen WorkerW under Progman is no longer confused with
+  Explorer's tiny helper WorkerW windows (size-filtered).
+- Attach now *verifies* visibility (parent, `IsWindowVisible`, and that
+  the player actually covers its parent) before reporting success, and
+  `%LocalAppData%\Intonaco\debug.log` records the OS build, the
+  detected layout, Progman's child z-order and the player's final
+  styles/rect for bug reports.
+
+### Added
+
+- Periodic placement self-check (every 5 s while a wallpaper is
+  applied): if Explorer reshuffles its desktop windows — e.g. a
+  wallpaper change recreates the system WorkerW above the player —
+  size and z-order are re-asserted automatically.
+- Unit tests for desktop-layout classification.
+
 ## [1.0.1] — 2026-10-26
 
 Hotfix for "Failed to attach to desktop" on current Windows 11 builds
@@ -110,5 +150,6 @@ First official release.
 - README: fixed the placeholder clone URL, an unclosed code fence, and the
   flattened Usage/Performance tables.
 
+[1.0.2]: https://github.com/77worldd/Intonaco/releases/tag/v1.0.2
 [1.0.1]: https://github.com/77worldd/Intonaco/releases/tag/v1.0.1
 [1.0.0]: https://github.com/77worldd/Intonaco/releases/tag/v1.0.0
