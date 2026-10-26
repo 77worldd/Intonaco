@@ -126,5 +126,48 @@ namespace Intonaco.Tests
                 classicWorkerWFound: false);
             Assert.Equal(DesktopLayout.Unknown, layout);
         }
+
+        [Fact]
+        public void HasWallpaperLayer_RaisedDefViewWithoutWorkerW_IsFalse()
+        {
+            // Regression for build 26300.9711: Progman had the raised
+            // ex-style and a DefView child, but no WorkerW existed. That is
+            // raised-capable, not split, so 0x052C must still be sent.
+            Assert.False(HasWallpaperLayer(
+                classicWorkerWFound: false,
+                progmanHasFullScreenWorkerWChild: false));
+        }
+
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public void HasWallpaperLayer_ActualWorkerW_IsTrue(
+            bool classicWorkerWFound, bool progmanHasFullScreenWorkerWChild)
+        {
+            Assert.True(HasWallpaperLayer(
+                classicWorkerWFound,
+                progmanHasFullScreenWorkerWChild));
+        }
+
+        [Fact]
+        public void ForceLayeredExStyle_WhenEnabled_AddsOnlyLayeredBit()
+        {
+            const uint wsExToolWindow = 0x00000080;
+            const uint wsExNoActivate = 0x08000000;
+            const uint wsExLayered = 0x00080000;
+
+            uint result = ForceLayeredExStyle(
+                wsExToolWindow | wsExNoActivate, keepLayered: true);
+
+            Assert.Equal(wsExToolWindow | wsExNoActivate | wsExLayered, result);
+        }
+
+        [Fact]
+        public void ForceLayeredExStyle_WhenDisabled_IsIdentity()
+        {
+            const uint exStyle = 0x08000080;
+            Assert.Equal(exStyle, ForceLayeredExStyle(exStyle, keepLayered: false));
+        }
     }
 }

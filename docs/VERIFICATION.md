@@ -21,6 +21,10 @@ are never silently skipped. If you run any of them, please report results
 
 - [ ] Apply an H.264 MP4: the video renders behind desktop icons, and icons
       remain visible, selectable and double-clickable
+- [ ] On Windows 11 24H2+/26H2, the fresh `%LocalAppData%\Intonaco\debug.log`
+      shows the `0x052C (0xD, 1)` split request when no WorkerW layer existed,
+      the Worker's appearance, `verified=True` with alpha 255, and Progman
+      children ordered `SHELLDLL_DefView` → player → system WorkerW
 - [ ] Desktop right-click menu (on empty wallpaper area) still works
 - [ ] Win+D (Show desktop) keeps the wallpaper playing
 - [ ] Second monitor / mixed-DPI setup: note which monitors are covered

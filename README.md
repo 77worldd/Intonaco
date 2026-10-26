@@ -50,7 +50,7 @@ For best performance, use H.264 MP4 files at your screen resolution or lower.
 
 ### Portable (recommended)
 
-1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.0.2-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
+1. Download from [Releases](https://github.com/77worldd/Intonaco/releases) — easiest is the single file `Intonaco-v1.0.3-win-x64.exe`: just run it, no unzip and no prerequisites. Or pick a zip:
    - `Intonaco-v1.0.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites (≈60–80 MB)
    - `Intonaco-v1.0.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
 2. Extract to any folder
@@ -127,9 +127,9 @@ are tracked in [docs/VERIFICATION.md](docs/VERIFICATION.md).
 ```text
 Intonaco.exe (single process)
 ├── WPF UI (MainWindow)
-├── PlayerWindow → parented to WorkerW desktop layer
+├── PlayerWindow → classic WorkerW, or layered Progman child on raised desktops
 │   └── MediaElement → Windows Media Foundation → DXVA2
-├── DesktopIntegration → WorkerW technique
+├── DesktopIntegration → layout detection, 0x052C split, verified placement
 ├── FullscreenDetector → 2-second polling (low overhead)
 └── SystemEventMonitor → sleep/wake/lock/display events
 ```
@@ -161,8 +161,10 @@ Intonaco.exe (single process)
 
 Windows 11 24H2 and newer (including 26H2 Insider builds) use a "raised
 desktop": the wallpaper is a WorkerW child of Progman under a layered icon
-view. Intonaco v1.0.2+ detects this layout and places a layered player
-directly under the icons. If the desktop still doesn't change:
+view. Intonaco v1.0.3+ requests that WorkerW layer when it is absent,
+guards the WPF player's `WS_EX_LAYERED` style against WPF removing it,
+and verifies the final layered placement before reporting success. If the
+desktop still doesn't change:
 
 - Make sure **desktop icons are shown** (right-click desktop → View → Show
   desktop icons) — some early 24H2 builds hid live wallpapers otherwise
