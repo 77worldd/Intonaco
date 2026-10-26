@@ -45,12 +45,18 @@ are never silently skipped. If you run any of them, please report results
       desktop playback
 - [ ] Moving the volume slider while muted unmutes and updates the percentage
 
-### v1.1.0 interface polish
+### v1.2.0 native interface and branding
 
-- [ ] The Desktop live/Paused/Ready/No video status pill matches the actual
-      desktop state
-- [ ] Dark, Light and System themes render readable cards, controls and
-      ComboBox popups; the native title bar follows the selected theme
+- [ ] The new cat/image mark appears in the EXE properties, taskbar button,
+      window title bar, system tray and app header; it remains recognizable
+      at 100%, 125% and 150% display scaling
+- [ ] The Playing on desktop/Paused/Ready/No wallpaper header status matches
+      the actual desktop state
+- [ ] Volume can be dragged smoothly, clicked to a position and adjusted by
+      keyboard; the percentage and mute state stay in sync
+- [ ] Dark, Light and System themes render readable Settings-style cards,
+      controls and ComboBox popups; the title-bar caption follows the app
+      surface and selected theme
 - [ ] The scrollable window remains usable at its minimum size and common
       Windows display-scaling values (100%, 125%, 150%)
 - [ ] Open location reveals the current video in File Explorer, and Open logs
