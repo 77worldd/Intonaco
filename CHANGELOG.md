@@ -4,6 +4,52 @@ All notable changes to Intonaco are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-10-26
+
+Fix for v1.0.2 still leaving the static wallpaper on Windows 11 26H2,
+OS Build 26300.9711. On-device diagnostics showed the player had the
+correct Progman parent, full-screen rect and DefView → player z-order,
+but two required conditions were missing: Explorer had never created a
+WorkerW wallpaper layer, and WPF had removed the player's
+`WS_EX_LAYERED` bit. v1.0.2 nevertheless logged “Raised attach
+succeeded.”
+
+### Fixed
+
+- **Request the raised-desktop split when no actual wallpaper layer
+  exists.** A Progman with `WS_EX_NOREDIRECTIONBITMAP` and a
+  `SHELLDLL_DefView` child is now treated as raised-capable rather than
+  already split. If neither a full-screen classic WorkerW nor a
+  full-screen Progman-child WorkerW exists, Intonaco sends the single
+  `0x052C (0xD, 1)` request and polls for up to two seconds for
+  Explorer to create the layer. It still does not send an `lParam=0`
+  variant on a raised desktop.
+- **Keep `WS_EX_LAYERED` on the WPF player.** WPF's `HwndTarget`
+  clears that bit in `WM_STYLECHANGING` whenever
+  `UsesPerPixelOpacity` is false, even when application code has just
+  set it with `SetWindowLongPtr`; `SetLayeredWindowAttributes` then
+  fails with Win32 error 87. Intonaco now installs a narrow
+  `HwndSource` style guard before enabling raised layering. The guard
+  restores the bit in `STYLESTRUCT.styleNew`, while keeping the normal
+  hardware-rendered, non-per-pixel WPF path and constant alpha `0xFF`.
+- **No more false raised-attach success.** Raised placement is verified
+  end-to-end before “Playing”: parent, visibility, coverage,
+  `WS_EX_LAYERED`, alpha read back as 255 with `LWA_ALPHA`, exact
+  position directly below `SHELLDLL_DefView`, and no full-screen system
+  WorkerW above the player. The 5-second placement check and reattach
+  path reassert and re-verify the layered state too.
+- Tiny Explorer WorkerW helper windows can no longer masquerade as a
+  classic full-screen wallpaper layer.
+- `debug.log` now records split-request results, waits for the WorkerW
+  layer, style-guard installation, ex-style readbacks and layered
+  alpha/flags, making the build 26300 acceptance state directly
+  inspectable.
+
+### Added
+
+- Regression tests for treating a raised-but-unsplit desktop as having
+  no wallpaper layer, and for the layered ex-style guard transform.
+
 ## [1.0.2] — 2026-10-26
 
 Fix for v1.0.1 reporting "Playing" while the actual desktop never
@@ -150,6 +196,7 @@ First official release.
 - README: fixed the placeholder clone URL, an unclosed code fence, and the
   flattened Usage/Performance tables.
 
+[1.0.3]: https://github.com/77worldd/Intonaco/releases/tag/v1.0.3
 [1.0.2]: https://github.com/77worldd/Intonaco/releases/tag/v1.0.2
 [1.0.1]: https://github.com/77worldd/Intonaco/releases/tag/v1.0.1
 [1.0.0]: https://github.com/77worldd/Intonaco/releases/tag/v1.0.0
