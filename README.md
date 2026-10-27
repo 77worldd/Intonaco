@@ -9,7 +9,7 @@
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 <p align="center">
-  <a href="docs/demo/intonaco-demo.mp4" title="Watch the full Intonaco demo with sound">
+  <a href="https://cdn.jsdelivr.net/gh/77worldd/Intonaco@main/docs/demo/intonaco-demo.mp4" title="Watch the full Intonaco demo with sound">
     <picture>
       <source media="(prefers-reduced-motion: reduce)" srcset="docs/demo/intonaco-demo-poster.png" />
       <img src="docs/demo/intonaco-demo-preview.gif" width="760" alt="Intonaco playing an animated video wallpaper behind the Windows desktop, with the Intonaco control window open" />
@@ -18,11 +18,11 @@
 </p>
 
 <p align="center">
-  <a href="docs/demo/intonaco-demo.mp4"><strong>&#9654; Watch the full 14-second demo with sound</strong></a>
+  <a href="https://cdn.jsdelivr.net/gh/77worldd/Intonaco@main/docs/demo/intonaco-demo.mp4"><strong>&#9654; Watch the full 14-second demo with sound</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://github.com/77worldd/Intonaco/raw/main/docs/demo/intonaco-demo.mp4">Open / download the MP4</a>
+  <a href="https://github.com/77worldd/Intonaco/raw/main/docs/demo/intonaco-demo.mp4">Download the MP4</a>
   <br />
-  <sub>The preview above plays right here on this page. It shows a live video wallpaper running behind the desktop, the Intonaco controls and the background-animation setting; click it for the full recording.</sub>
+  <sub>The preview plays right here on this page. One click opens the full recording in your browser's video player, with sound, seeking and full-screen controls.</sub>
 </p>
 
 **Lightweight live wallpaper for Windows 11**
