@@ -919,27 +919,26 @@ namespace Intonaco.Core
         /// (WPF default), any lower value sets Timeline.DesiredFrameRate, which
         /// is the frame-interval hint the WPF media clock honours: 30 fps means
         /// a ~33.3 ms interval instead of ~16.6 ms, halving the number of
-        /// video frames composited onto the desktop. Applied to both the
-        /// MediaElement and its host root so the value survives re-parenting.
+        /// video frames composited onto the desktop.
+        ///
+        /// The value is written as a local value on the MediaElement only. The
+        /// property is an inheriting attached property, so writing it on the
+        /// host root as well leaves a stale inherited value behind after a
+        /// ClearValue and can re-cap a later 60 fps session.
         /// </summary>
         private void ApplyFrameRateCap()
         {
+            if (_mediaElement == null)
+                return;
+
             int fps = Math.Clamp(_targetFps, 1, 60);
 
             try
             {
-                // 60 fps means "uncapped": clear the attached value so WPF uses
-                // its default. Anything lower writes the cap explicitly.
                 if (fps >= 60)
-                {
-                    _mediaElement?.ClearValue(Timeline.DesiredFrameRateProperty);
-                    _host?.ClearValue(Timeline.DesiredFrameRateProperty);
-                }
+                    _mediaElement.ClearValue(Timeline.DesiredFrameRateProperty);
                 else
-                {
-                    _mediaElement?.SetValue(Timeline.DesiredFrameRateProperty, fps);
-                    _host?.SetValue(Timeline.DesiredFrameRateProperty, fps);
-                }
+                    _mediaElement.SetValue(Timeline.DesiredFrameRateProperty, fps);
             }
             catch (Exception ex)
             {

@@ -351,24 +351,20 @@ namespace Intonaco.Tests
                 var host = (Grid)player.CreateHost();
                 var media = Assert.IsType<MediaElement>(host.Children[0]);
 
+                // The cap is a local value on the MediaElement, which owns the
+                // media clock. It must track the setting exactly, and 60 fps
+                // must remove it so WPF presents at its normal rate.
                 player.TargetFps = 30;
                 Assert.Equal((object)30, media.GetValue(Timeline.DesiredFrameRateProperty));
-                Assert.Equal((object)30, host.GetValue(Timeline.DesiredFrameRateProperty));
 
                 player.TargetFps = 15;
                 Assert.Equal((object)15, media.GetValue(Timeline.DesiredFrameRateProperty));
 
-                // 60 fps means "uncapped": the cap must be cleared (or raised to
-                // the full rate) so WPF presents at its normal rate.
                 player.TargetFps = 60;
                 object? mediaCap = media.GetValue(Timeline.DesiredFrameRateProperty);
-                object? hostCap = host.GetValue(Timeline.DesiredFrameRateProperty);
                 Assert.True(
                     mediaCap is null || (mediaCap is int mediaFps && mediaFps >= 60),
                     $"60 fps must clear the media cap but found {mediaCap}.");
-                Assert.True(
-                    hostCap is null || (hostCap is int hostFps && hostFps >= 60),
-                    $"60 fps must clear the host cap but found {hostCap}.");
             }
             finally
             {
