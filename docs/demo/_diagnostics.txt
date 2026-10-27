@@ -1,0 +1,150 @@
++ echo '== info page =='
+== info page ==
++ curl -sS -L --max-time 90 -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36' -c /tmp/cookies.txt -D /tmp/info.headers -o /tmp/info.html -w 'code=%{http_code} size=%{size_download} type=%{content_type}\n' https://tempfile.org/gFLPJZQSyLr/
+code=200 size=42084 type=text/html; charset=utf-8
++ head -40 /tmp/info.headers
+HTTP/2 200 
+date: Tue, 27 Oct 2026 21:27:48 GMT
+content-type: text/html; charset=utf-8
+server: cloudflare
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+vary: Accept-Encoding
+vary: Accept-Encoding
+cross-origin-opener-policy: unsafe-none
+cross-origin-resource-policy: cross-origin
+origin-agent-cluster: ?1
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-dns-prefetch-control: off
+x-download-options: noopen
+x-frame-options: DENY
+x-permitted-cross-domain-policies: none
+x-xss-protection: 1; mode=block
+ratelimit-policy: 10000;w=900
+ratelimit-limit: 10000
+ratelimit-remaining: 9999
+ratelimit-reset: 900
+x-robots-tag: noindex, nofollow
+content-security-policy: upgrade-insecure-requests;
+access-control-allow-origin: *
+access-control-allow-methods: GET, POST, DELETE, PUT, PATCH, OPTIONS
+access-control-allow-headers: Content-Type, Authorization, X-Requested-With
+access-control-expose-headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After
+cross-origin-embedder-policy: unsafe-none; report-to='default'
+cross-origin-embedder-policy-report-only: unsafe-none; report-to='default'
+cross-origin-opener-policy-report-only: unsafe-none; report-to='default'
+permissions-policy: accelerometer=(), camera=(), cross-origin-isolated=(), display-capture=(self), encrypted-media=(), fullscreen=*, geolocation=(self), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=*, picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), xr-spatial-tracking=(), gamepad=(), serial=()
+cache-control: public, max-age=1809, s-maxage=1809, stale-while-revalidate=60
+expires: Tue, 27 Oct 2026 21:57:58 GMT
+x-file-expiry: 2026-10-27T17:57:58.230-04:00
+x-cache-seconds: 1809
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=H1lF%2BnyDa0b%2FwEBqy7CCv9hkEjcpxboDE4a3MxFtTU3D42nuDdwqOaGY7jFYD794G9Fi6%2BejhhzM0PbQ8JLGCZC2hyydsLLnxwqRuFHb5u65XIr5W7tmF9ubL9NbTGA%3D"}]}
+accept-ranges: bytes
+cf-cache-status: MISS
+cf-ray: a514c96f1cfe5024-SJC
++ echo '== lines mentioning download/mp4/cdn =='
+== lines mentioning download/mp4/cdn ==
++ grep -oiE '.{0,140}(download|\.mp4|cdn\.|storage|blob).{0,140}' /tmp/info.html
++ head -60
+    <title>Desktop 2026.10.27 - 20.55.47.01.mp4 - TempFile.org</title>
+    <meta name="description" content="46.53 MB MP4 Video • Free download, no signup • Auto-deletes after expiry">
+    <meta property="og:title" content="Desktop 2026.10.27 - 20.55.47.01.mp4 - TempFile.org">
+    <meta property="og:description" content="46.53 MB MP4 Video • Free download, no signup • Auto-deletes after expiry">
+    <meta name="twitter:title" content="Desktop 2026.10.27 - 20.55.47.01.mp4 - TempFile.org">
+    <meta name="twitter:description" content="46.53 MB MP4 Video • Free download, no signup • Auto-deletes after expiry">
+         Saved choice (localStorage "tf-user-theme") wins, otherwise the system setting.
+        try { t = localStorage.getItem('tf-user-theme'); } catch (e) {}
+    function downloadJsAtOnload() {
+        setTimeout(function downloadJs() {
+        window.addEventListener("load", downloadJsAtOnload, false);
+        window.attachEvent("onload", downloadJsAtOnload);
+    else window.onload = downloadJsAtOnload;
+                <div class="file-name" id="fileName">Desktop 2026.10.27 - 20.55.47.01.mp4</div>
+            <div class="countdown-text">Preparing your download...</div>
+        <div class="download-section">
+            <button class="download-btn" id="downloadBtn" disabled>
+                <span class="download-icon" id="downloadIcon"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
+                <span id="downloadText">Preparing Download...</span>
+            <button class="retry-btn" id="retryBtn" style="display: none;" onclick="retryDownload()">
+ Retry Download
+                <span>Download not starting? Service status:</span>
+"sb-chip" href="https://status.tempfile.org/?utm_source=tempfile.org&amp;utm_medium=status_pill" target="_blank" rel="noopener" title="File downloads status"><img data-src="https://status.tempfile.org/badge/service/downloads.svg" height="20" alt="File downloads status"></a>
+            <div class="link-title">Direct Download Link</div>
+                <input type="text" class="link-input" id="directLink" value="https://tempfile.org/gFLPJZQSyLr/download" readonly>
+mes between 1-48 hours, and share generated links. Files are automatically and permanently deleted when expired, ensuring no long-term data storage.</p>
+                  <p>Chunked uploads for reliability, automatic virus scanning, and HTTPS encryption protect your files during transfer and storage.</p>
+            fileName: "Desktop 2026.10.27 - 20.55.47.01.mp4",
+            downloadUrl: "https://tempfile.org/gFLPJZQSyLr/download",
+                document.getElementById('downloadBtn').disabled = true;
+            const downloadBtn = document.getElementById('downloadBtn');
+            const downloadText = document.getElementById('downloadText');
+                    downloadBtn.disabled = false;
+                    downloadText.innerHTML = ' Download File';
+        function handleDownload() {
+            const downloadBtn = document.getElementById('downloadBtn');
+            const downloadText = document.getElementById('downloadText');
+            const downloadIcon = document.getElementById('downloadIcon');
+            downloadBtn.classList.add('download-started');
+            downloadBtn.disabled = true;
+            downloadText.textContent = 'Download Started';
+            downloadIcon.innerHTML = '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke
+            downloadIcon.classList.add('loading');
+            // Start the actual download
+            window.location.href = templateData.downloadUrl;
+        // Next to the Retry button, show the live "File downloads" badge. It is only requested now,
+        function retryDownload() {
+            // Simply refresh the page to restart the download process
+            // Set up download button
+            document.getElementById('downloadBtn').onclick = handleDownload;
++ echo '== file api =='
+== file api ==
++ curl -sS -L --max-time 90 -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36' https://tempfile.org/api/file/gFLPJZQSyLr
+{"success":true,"file":{"id":"gFLPJZQSyLr","name":"Desktop 2026.10.27 - 20.55.47.01.mp4","size":48788089,"mimeType":"video/mp4","uploadTime":1793134678230,"expiryTime":1793138278230,"exists":true,"downloadUrl":"/gFLPJZQSyLr/download","security":{"hasWarning":false,"warningLevel":"none","warningMessage":null,"suspiciousPatterns":[],"scanDate":null}}}+ echo
+
++ echo '== try https://tempfile.org/gFLPJZQSyLr/download =='
+== try https://tempfile.org/gFLPJZQSyLr/download ==
++ curl -sS -L --max-time 900 --retry 2 --retry-delay 2 -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36' -e https://tempfile.org/gFLPJZQSyLr/ -b /tmp/cookies.txt -c /tmp/cookies.txt -D /tmp/dl.headers -o /tmp/intonaco-source.mp4 -w 'code=%{http_code} size=%{size_download} type=%{content_type} url=%{url_effective}\n' https://tempfile.org/gFLPJZQSyLr/download
+code=200 size=48788089 type=video/mp4 url=https://tempfile.org/gFLPJZQSyLr/download
++ head -30 /tmp/dl.headers
+HTTP/2 200 
+date: Tue, 27 Oct 2026 21:27:50 GMT
+content-type: video/mp4
+content-length: 48788089
+server: cloudflare
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+cross-origin-opener-policy: unsafe-none
+cross-origin-resource-policy: cross-origin
+origin-agent-cluster: ?1
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-dns-prefetch-control: off
+x-download-options: noopen
+x-frame-options: DENY
+x-permitted-cross-domain-policies: none
+x-xss-protection: 1; mode=block
+ratelimit-policy: 10000;w=900
+ratelimit-limit: 10000
+ratelimit-remaining: 9997
+ratelimit-reset: 899
+x-robots-tag: noindex, nofollow
+content-security-policy: default-src 'none'
+access-control-allow-origin: *
+access-control-allow-methods: GET, POST, DELETE, PUT, PATCH, OPTIONS
+access-control-allow-headers: Content-Type, Authorization, X-Requested-With
+access-control-expose-headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After
+cross-origin-embedder-policy: unsafe-none; report-to='default'
+cross-origin-embedder-policy-report-only: unsafe-none; report-to='default'
+cross-origin-opener-policy-report-only: unsafe-none; report-to='default'
++ ls -l /tmp/intonaco-source.mp4
+-rw-r--r-- 1 runner runner 48788089 Oct 27 21:27 /tmp/intonaco-source.mp4
++ head -c 200 /tmp/intonaco-source.mp4
++ strings
++ head -5
+ftypmp42
+isommp42
+mdat
+ACaHZ
+,MFb#
+== probe ==
