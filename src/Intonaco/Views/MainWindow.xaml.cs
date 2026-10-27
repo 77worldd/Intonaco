@@ -59,6 +59,7 @@ namespace Intonaco.Views
         private const int DwmwaTextColor = 36;
 
         private bool _isApplied;
+        private bool _pausedByUser;
         private bool _pausedByFullscreen;
         private bool _pausedByForeground;
         private bool _pausedBySystem;
@@ -138,13 +139,10 @@ namespace Intonaco.Views
         {
             _suppressEvents = true;
 
-            // v2: PauseWhenUnfocused is the primary toggle; keep legacy PauseOnFullscreen in sync.
-            bool pauseEnabled = _settings.PauseWhenUnfocused || _settings.PauseOnFullscreen;
-            try
-            {
-                PauseFullscreenToggle.IsChecked = pauseEnabled;
-            }
-            catch { /* element may not exist if XAML was updated */ }
+            // Dedicated focus-animation mode. Mode A pauses animation
+            // updates on focus loss; Mode B keeps them running. The choice is
+            // persisted in settings.json and restored on every launch.
+            SelectComboByTag(BackgroundAnimationComboBox, _settings.BackgroundAnimationMode);
 
             StartWithWindowsToggle.IsChecked = StartupManager.IsRegistered;
             StartMinimizedToggle.IsChecked = _settings.StartMinimized;
@@ -206,8 +204,9 @@ namespace Intonaco.Views
             _player.ErrorOccurred += OnPlayerError;
             _player.MediaOpened += OnMediaOpened;
 
-            // v2: Foreground-aware auto-pause (Lively behaviour). Keep legacy
-            // fullscreen detector as fallback but gate both by IsAutoPauseEnabled.
+            // Focus-driven auto-pause (Mode A). Both detectors are gated by
+            // the selected background animation mode; Mode B stops them so
+            // the wallpaper keeps animating while another app is focused.
             _fullscreenDetector.FullscreenStateChanged += OnFullscreenChanged;
             _fullscreenDetector.IsEnabled = _settings.IsAutoPauseEnabled;
 
@@ -532,8 +531,7 @@ namespace Intonaco.Views
         private void ApplyWallpaper(
             string filePath,
             bool startPaused = false,
-            TimeSpan pausedPosition = default,
-            BitmapSource? pausedFrame = null)
+            TimeSpan pausedPosition = default)
         {
             ClearError();
 
@@ -584,7 +582,17 @@ namespace Intonaco.Views
             _player.LoopPlayback = _settings.LoopPlayback;
 
             if (startPaused)
-                _player.PauseAt(pausedPosition, pausedFrame);
+            {
+                // Explorer-restart recovery. Keep rendering through the live
+                // media surface at the saved position; no static frame is
+                // carried across from the destroyed player window.
+                _player.PauseAt(pausedPosition);
+                _pausedByUser = !(_pausedByFullscreen || _pausedByForeground || _pausedBySystem);
+            }
+            else
+            {
+                _pausedByUser = false;
+            }
 
             _isApplied = true;
             UpdateBackgroundTimers();
@@ -604,6 +612,7 @@ namespace Intonaco.Views
             _player.Stop();
             _desktop.Detach();
             _isApplied = false;
+            _pausedByUser = false;
             _pausedByFullscreen = false;
             _pausedByForeground = false;
             _pausedBySystem = false;
@@ -691,9 +700,10 @@ namespace Intonaco.Views
         }
 
         /// <summary>
-        /// Keeps the second preview decoder alive only when it can actually
-        /// be seen and the desktop player is playing. Pausing or sending the
-        /// main window to the tray closes its Media Foundation pipeline.
+        /// Keeps the second preview decoder alive only when the preview can
+        /// actually be seen. Pausing stops its clock in place - the same
+        /// rendering surface keeps showing the last frame - and sending the
+        /// main window to the tray still closes the preview pipeline.
         /// </summary>
         private void RefreshPreviewForCurrentState()
         {
@@ -759,6 +769,8 @@ namespace Intonaco.Views
                 PreviewMedia.SpeedRatio = _player.PlaybackSpeed;
                 ApplyPreviewFrameRateCap(_settings.TargetFps);
                 PreviewMedia.IsMuted = true;
+                // A resume must not reset the preview: the same source is
+                // simply told to play again from its current frame.
                 PreviewMedia.Play();
                 PreviewMedia.Visibility = Visibility.Visible;
                 PreviewImage.Source = null;
@@ -773,28 +785,60 @@ namespace Intonaco.Views
 
         private void ShowPausedPreview()
         {
-            BitmapSource? frame = _player.PausedFrame;
-
-            // If the desktop player had to use its native-pause fallback,
-            // capture the preview's own current frame before closing it.
-            if (frame == null && PreviewMedia.Source != null)
-                frame = WallpaperPlayer.CaptureFrame(PreviewMedia);
-
-            ReleasePreviewPipeline();
-
-            if (frame != null)
-            {
-                PreviewImage.Source = frame;
-                PreviewImage.Stretch = _player.StretchMode;
-                PreviewImage.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                PreviewImage.Source = null;
-                PreviewImage.Visibility = Visibility.Collapsed;
-            }
-
+            // The preview uses the same rule as the desktop: stop animation
+            // updates, keep the rendering surface. Photographing a WPF
+            // MediaElement into a bitmap and closing it is exactly what put
+            // black bands/blocks around a paused background.
+            PreviewImage.Source = null;
+            PreviewImage.Visibility = Visibility.Collapsed;
             PreviewPlaceholder.Visibility = Visibility.Collapsed;
+
+            if (PreviewMedia.Source != null)
+            {
+                try
+                {
+                    PreviewMedia.Stretch = _player.StretchMode;
+                    PreviewMedia.Pause();
+                    PreviewMedia.Visibility = Visibility.Visible;
+                }
+                catch
+                {
+                    StartPausedPreview();
+                }
+                return;
+            }
+
+            // The preview pipeline was released while the window was hidden;
+            // reopen it at the desktop's paused position, still paused.
+            StartPausedPreview();
+        }
+
+        /// <summary>
+        /// Opens the preview source without starting its clock. MediaOpened
+        /// seeks it to the desktop position and pauses it, so a paused
+        /// wallpaper never animates in the preview either.
+        /// </summary>
+        private void StartPausedPreview()
+        {
+            if (_previewFilePath == null || !IsPreviewWindowVisible)
+                return;
+
+            try
+            {
+                ReleasePreviewPipeline();
+                PreviewMedia.Source = new Uri(_previewFilePath, UriKind.Absolute);
+                _previewNeedsPositionSync = true;
+                PreviewMedia.Stretch = _player.StretchMode;
+                PreviewMedia.SpeedRatio = _player.PlaybackSpeed;
+                ApplyPreviewFrameRateCap(_settings.TargetFps);
+                PreviewMedia.IsMuted = true;
+                PreviewMedia.Visibility = Visibility.Visible;
+                PreviewMedia.Pause();
+            }
+            catch
+            {
+                ReleasePreviewPipeline();
+            }
         }
 
         private void ReleasePreviewPipeline()
@@ -810,20 +854,33 @@ namespace Intonaco.Views
             PreviewMedia.Visibility = Visibility.Collapsed;
         }
 
-        private void OnPausedFrameChanged(BitmapSource? frame)
+        private void OnPreviewMediaOpened(object sender, RoutedEventArgs e)
         {
-            if (!Dispatcher.CheckAccess())
+            if (_player.CurrentState == WallpaperPlayer.PlaybackState.Paused)
             {
-                Dispatcher.BeginInvoke(() => OnPausedFrameChanged(frame));
+                // A preview reopened while paused must show the desktop's
+                // frozen frame and must never start animating.
+                try
+                {
+                    if (_previewNeedsPositionSync &&
+                        _player.Position > TimeSpan.FromMilliseconds(500))
+                    {
+                        PreviewMedia.Position = _player.Position;
+                    }
+                    PreviewMedia.Pause();
+                }
+                catch
+                {
+                    // Keeping the first frame is preferable to a black preview.
+                }
+
+                _previewNeedsPositionSync = false;
+                PreviewMedia.Visibility = IsPreviewWindowVisible
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
                 return;
             }
 
-            if (_player.CurrentState == WallpaperPlayer.PlaybackState.Paused)
-                RefreshPreviewForCurrentState();
-        }
-
-        private void OnPreviewMediaOpened(object sender, RoutedEventArgs e)
-        {
             if (!_previewNeedsPositionSync)
                 return;
 
@@ -950,10 +1007,15 @@ namespace Intonaco.Views
         {
             if (_player.CurrentState == WallpaperPlayer.PlaybackState.Playing)
             {
+                // Explicit manual pause. It is recorded separately from focus
+                // auto-pause so no focus event can resume it behind the
+                // user's back, in either animation mode.
+                _pausedByUser = true;
                 _player.Pause();
             }
             else if (_player.CurrentState == WallpaperPlayer.PlaybackState.Paused)
             {
+                _pausedByUser = false;
                 _player.Resume();
                 _pausedByFullscreen = false;
                 _pausedByForeground = false;
@@ -961,6 +1023,7 @@ namespace Intonaco.Views
             else if (!string.IsNullOrEmpty(_settings.LastWallpaperPath) &&
                      File.Exists(_settings.LastWallpaperPath))
             {
+                _pausedByUser = false;
                 ApplyWallpaper(_settings.LastWallpaperPath);
             }
         }
@@ -1017,22 +1080,53 @@ namespace Intonaco.Views
 
         #region Settings
 
-        private void OnSettingChanged(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// Persists the dedicated background-animation mode. Mode A (default)
+        /// pauses animation updates while another app is focused; Mode B
+        /// keeps the animation running. Changing the mode never touches a
+        /// manual pause and never changes the rendered background.
+        /// </summary>
+        private void OnBackgroundAnimationModeChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_suppressEvents) return;
 
-            bool enabled = false;
-            try { enabled = PauseFullscreenToggle.IsChecked == true; }
-            catch { enabled = _settings.IsAutoPauseEnabled; }
+            if (BackgroundAnimationComboBox.SelectedItem is not ComboBoxItem item ||
+                item.Tag is not string mode)
+            {
+                return;
+            }
 
-            _settings.PauseWhenUnfocused = enabled;
-            _settings.PauseOnFullscreen = enabled; // keep legacy in sync
-            _fullscreenDetector.IsEnabled = enabled;
-            _foregroundDetector.IsEnabled = enabled;
+            _settings.BackgroundAnimationMode =
+                AppSettings.NormalizeBackgroundAnimationMode(mode);
+            _settings.Normalize(); // keep the legacy flags in sync for old builds
             _settings.Save();
-            UpdateBackgroundTimers();
 
-            DebugLog.Write($"Auto-pause {(enabled ? "enabled" : "disabled")}");
+            bool autoPauseEnabled = _settings.IsAutoPauseEnabled;
+            _fullscreenDetector.IsEnabled = autoPauseEnabled;
+            _foregroundDetector.IsEnabled = autoPauseEnabled;
+
+            if (!autoPauseEnabled)
+            {
+                // Mode B: release any focus-owned pause. A user-owned pause
+                // must remain paused, so it is explicitly excluded.
+                bool focusOwnedPause = _pausedByForeground || _pausedByFullscreen;
+                _pausedByForeground = false;
+                _pausedByFullscreen = false;
+
+                if (PlaybackFocusPolicy.CanApplyContinueMode(
+                        _pausedByUser,
+                        focusOwnedPause,
+                        _pausedBySystem,
+                        _player.CurrentState == WallpaperPlayer.PlaybackState.Paused))
+                {
+                    _player.Resume();
+                }
+            }
+
+            UpdateBackgroundTimers();
+            DebugLog.Write(
+                $"Background animation mode: {_settings.BackgroundAnimationMode} " +
+                $"(manual pause={_pausedByUser}).");
         }
 
         private void OnStartupChanged(object sender, RoutedEventArgs e)
@@ -1203,8 +1297,7 @@ namespace Intonaco.Views
                         Dispatcher,
                         () => !_isExiting &&
                               _player.CurrentState == WallpaperPlayer.PlaybackState.Paused &&
-                              _player.IsSuspended &&
-                              PreviewMedia.Source == null);
+                              !IsPreviewWindowVisible);
                 }
             }
 
@@ -1365,7 +1458,10 @@ namespace Intonaco.Views
         {
             Dispatcher.BeginInvoke(() =>
             {
-                if (isFullscreen && _player.CurrentState == WallpaperPlayer.PlaybackState.Playing)
+                bool isPlaying = _player.CurrentState == WallpaperPlayer.PlaybackState.Playing;
+                if (isFullscreen &&
+                    PlaybackFocusPolicy.CanAutoPause(
+                        _pausedByUser, _settings.IsAutoPauseEnabled, isPlaying))
                 {
                     DebugLog.Write("Auto-pause: fullscreen app detected");
                     _pausedByFullscreen = true;
@@ -1374,7 +1470,8 @@ namespace Intonaco.Views
                 else if (!isFullscreen && _pausedByFullscreen)
                 {
                     _pausedByFullscreen = false;
-                    if (!_pausedBySystem && !_pausedByForeground)
+                    if (PlaybackFocusPolicy.CanAutoResume(
+                            _pausedByUser, !_pausedBySystem && !_pausedByForeground))
                     {
                         DebugLog.Write("Auto-resume: fullscreen app left");
                         _player.Resume();
@@ -1388,7 +1485,11 @@ namespace Intonaco.Views
             Dispatcher.BeginInvoke(() =>
             {
                 ForegroundDetector.IsForegroundDesktop(out string proc);
-                if (!isDesktopForeground && _player.CurrentState == WallpaperPlayer.PlaybackState.Playing)
+                bool autoPauseEnabled = _settings.IsAutoPauseEnabled;
+                bool isPlaying = _player.CurrentState == WallpaperPlayer.PlaybackState.Playing;
+
+                if (!isDesktopForeground &&
+                    PlaybackFocusPolicy.CanAutoPause(_pausedByUser, autoPauseEnabled, isPlaying))
                 {
                     DebugLog.Write($"Auto-pause: foreground is '{proc}' (not desktop)");
                     _pausedByForeground = true;
@@ -1397,11 +1498,18 @@ namespace Intonaco.Views
                 else if (isDesktopForeground && _pausedByForeground)
                 {
                     _pausedByForeground = false;
-                    if (!_pausedBySystem && !_pausedByFullscreen)
+                    if (PlaybackFocusPolicy.CanAutoResume(
+                            _pausedByUser, !_pausedBySystem && !_pausedByFullscreen))
                     {
                         DebugLog.Write($"Auto-resume: foreground returned to desktop ('{proc}')");
                         _player.Resume();
                     }
+                }
+                else if (!autoPauseEnabled && _pausedByForeground)
+                {
+                    // Mode B: the detector may still deliver one last event.
+                    // Drop focus ownership without resuming a manual pause.
+                    _pausedByForeground = false;
                 }
             });
         }
@@ -1410,7 +1518,8 @@ namespace Intonaco.Views
         {
             Dispatcher.BeginInvoke(() =>
             {
-                if (_player.CurrentState == WallpaperPlayer.PlaybackState.Playing)
+                if (_player.CurrentState == WallpaperPlayer.PlaybackState.Playing &&
+                    !_pausedByUser)
                 {
                     DebugLog.Write("System pause (lock/sleep)");
                     _pausedBySystem = true;
@@ -1424,7 +1533,9 @@ namespace Intonaco.Views
             Dispatcher.BeginInvoke(() =>
             {
                 _pausedBySystem = false;
-                if (!_pausedByFullscreen && !_pausedByForeground &&
+                if (PlaybackFocusPolicy.CanAutoResume(
+                        _pausedByUser,
+                        !_pausedByFullscreen && !_pausedByForeground) &&
                     _player.CurrentState == WallpaperPlayer.PlaybackState.Paused)
                 {
                     DebugLog.Write("System resume (unlock/wake)");
@@ -1433,7 +1544,10 @@ namespace Intonaco.Views
                     timer.Tick += (_, _) =>
                     {
                         timer.Stop();
-                        if (_isApplied)
+                        // Re-check ownership after the delay: a manual
+                        // pause made in the meantime must never be resumed.
+                        if (_isApplied && !_pausedByUser &&
+                            _player.CurrentState == WallpaperPlayer.PlaybackState.Paused)
                         {
                             EnsureAttached();
                             _player.Resume();
@@ -1452,8 +1566,8 @@ namespace Intonaco.Views
                 {
                     _desktop.ResizeToDesktop();
                     _playerWindow?.UpdateLayout();
-                    if (_player.IsSuspended)
-                        _player.RefreshPausedFrame();
+                    // The media element is still the rendering surface even
+                    // while paused; WPF re-fits it on layout automatically.
                 }
             });
         }
@@ -1472,14 +1586,12 @@ namespace Intonaco.Views
             string? path = _player.CurrentFilePath ?? _settings.LastWallpaperPath;
             var state = _player.CurrentState;
             TimeSpan position = _player.Position;
-            BitmapSource? pausedFrame = _player.PausedFrame;
             if (!string.IsNullOrEmpty(path) && File.Exists(path))
             {
                 ApplyWallpaper(
                     path,
                     startPaused: state == WallpaperPlayer.PlaybackState.Paused,
-                    pausedPosition: position,
-                    pausedFrame: pausedFrame);
+                    pausedPosition: position);
             }
         }
 

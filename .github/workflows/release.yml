@@ -131,10 +131,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: Intonaco ${{ steps.version.outputs.tag }} — Major Performance & UI Overhaul
+          name: Intonaco ${{ steps.version.outputs.tag }}
           generate_release_notes: false
           body: |
-            # Intonaco v${{ steps.version.outputs.version }} — Major Performance & UI Overhaul
+            # Intonaco v${{ steps.version.outputs.version }} — Pause rendering fix & background animation modes
 
             **Lightweight live wallpaper for Windows 11** — video wallpapers behind your desktop icons, decoded by Windows Media Foundation (DXVA2). No VLC, no browser engine, single process. Super fast and low-resource like Lively.
 
@@ -148,20 +148,17 @@ jobs:
 
             The installer preserves `%LocalAppData%\Intonaco` settings during upgrades/reinstalls and uninstall. For the zips: extract anywhere and run `Intonaco.exe`. Verify downloads with `SHA256SUMS.txt`.
 
-            ### What's Fixed & New in v2.0.0
-            - **No more black bars** — wallpaper always fills the monitor with `UniformToFill` (cover) in play and pause.
-            - **True zero-resource pause** — pausing captures the current frame, shows it as a static image, and completely unloads the Media Foundation decoder (CPU/GPU → ~0%). Resume restores the exact position.
-            - **Frame-rate throttling** — `30 fps` vs `60 fps` now measurably reduces GPU/CPU via `Timeline.DesiredFrameRate` + composition guard.
-            - **Auto-pause when other apps are focused** — foreground window detection (1.2s) auto-pauses when Discord, browsers, games, etc. are in focus and resumes on desktop. Toggle enabled by default.
-            - **Start with Windows** — correctly writes `HKCU\...\Run\Intonaco` with `--minimized` and deletes on disable.
-            - **Start minimized** — silent boot in system tray with wallpaper playing; supports `--minimized` / `-m`.
-            - **Resume last wallpaper** — last path, volume, fit, fps, speed, and loop are persisted to `%LocalAppData%\Intonaco\settings.json` and restored on launch.
-            - **Unsupported video errors** — friendly toast/dialog: “Unable to play video: Unsupported codec or format. Please use standard MP4 (H.264) or WebM files.”
-            - **Windows 11 Fluent UI overhaul** — clean dark Mica `#1E1E1E`, card `#272727`, subtle borders, Windows Blue `#60CDFF` accent sparingly, no neon/AI-slop.
+            ### What's new in v2.0.2
 
-            See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/CHANGELOG.md) for full details and [docs/VERIFICATION.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/docs/VERIFICATION.md) for the on-device test checklist.
+            - **Critical fix: black borders/blocks when manually pausing the background.** Pause now stops only the media clock — no snapshot, no source close, no surface swap. The last rendered frame stays on the same MediaElement with identical size, position and fit, so no black regions can appear. Resume continues from that exact frame with no reopen, seek or flicker.
+            - The in-app preview, fit changes while paused and Explorer-restart recovery all use the same always-rendered live surface.
+            - **New setting: "Background animation when unfocused"** in the Wallpaper settings card, with two persisted modes — *Pause when app loses focus* (default) and *Keep animating when unfocused*.
+            - Manual pause is now fully independent of focus events and of the selected mode: focus/system events can never resume a wallpaper the user paused explicitly.
+            - The chosen mode is saved to `%LocalAppData%\Intonaco\settings.json` and restored after every restart.
 
-            **Full Changelog**: https://github.com/${{ github.repository }}/compare/v1.3.0...${{ steps.version.outputs.tag }}
+            Losing focus was never the cause of the black borders (the desktop is simply covered while another app is focused); that behaviour remains intact. See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/CHANGELOG.md) for full details and [docs/VERIFICATION.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/docs/VERIFICATION.md) for the on-device test checklist.
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/CHANGELOG.md
           files: |
             release/*.zip
             release/*.exe

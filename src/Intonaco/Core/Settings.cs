@@ -11,6 +11,12 @@ namespace Intonaco.Core
     {
         internal const int MaxRecentWallpapers = 6;
 
+        /// <summary>Mode A (default): stop animation updates when focus is lost.</summary>
+        public const string PauseWhenUnfocusedMode = "PauseWhenUnfocused";
+
+        /// <summary>Mode B: keep the background animating when focus is lost.</summary>
+        public const string ContinueWhenUnfocusedMode = "ContinueWhenUnfocused";
+
         public string? LastWallpaperPath { get; set; }
         public List<string> RecentWallpaperPaths { get; set; } = new List<string>();
         public bool IsMuted { get; set; } = true;
@@ -30,6 +36,14 @@ namespace Intonaco.Core
         /// saves significant CPU/GPU. Enabled by default.
         /// </summary>
         public bool PauseWhenUnfocused { get; set; } = true;
+
+        /// <summary>
+        /// Dedicated user choice for background animation when the app is not
+        /// focused. Persisted in settings.json and restored on restart:
+        /// <see cref="PauseWhenUnfocusedMode"/> (default) or
+        /// <see cref="ContinueWhenUnfocusedMode"/>.
+        /// </summary>
+        public string BackgroundAnimationMode { get; set; } = PauseWhenUnfocusedMode;
 
         public bool StartWithWindows { get; set; } = false;
         public bool StartMinimized { get; set; } = false;
@@ -56,6 +70,15 @@ namespace Intonaco.Core
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
+        /// <summary>
+        /// Canonicalizes a (possibly hand-edited) mode value. Anything that is
+        /// not an explicit Mode B request falls back to the safe default.
+        /// </summary>
+        internal static string NormalizeBackgroundAnimationMode(string? mode)
+            => string.Equals(mode, ContinueWhenUnfocusedMode, StringComparison.OrdinalIgnoreCase)
+                ? ContinueWhenUnfocusedMode
+                : PauseWhenUnfocusedMode;
+
         internal static string NormalizeFit(string? fit)
         {
             if (string.Equals(fit, "Fit", StringComparison.OrdinalIgnoreCase))
@@ -75,6 +98,14 @@ namespace Intonaco.Core
                 ? 1.0
                 : Math.Clamp(PlaybackSpeed, 0.25, 2.0);
             WallpaperFit = NormalizeFit(WallpaperFit);
+            BackgroundAnimationMode = NormalizeBackgroundAnimationMode(BackgroundAnimationMode);
+
+            // The new mode is the single source of truth. Keep the two legacy
+            // flags in sync so older builds reading the same settings file
+            // see the same choice and IsAutoPauseEnabled cannot disagree.
+            PauseWhenUnfocused = PauseAnimationsWhenUnfocused;
+            PauseOnFullscreen = PauseAnimationsWhenUnfocused;
+
             Theme = Theme switch
             {
                 "Light" => "Light",
@@ -156,6 +187,18 @@ namespace Intonaco.Core
             if (!hasNewField && !settings.PauseOnFullscreen)
                 settings.PauseWhenUnfocused = false;
 
+            // v1.x/v2.0.x files have no dedicated mode field. Derive it from
+            // the preference they did persist, so an existing user who turned
+            // auto-pause off is not silently switched back to Mode A.
+            bool hasModeField = json.IndexOf(
+                "\"backgroundAnimationMode\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!hasModeField)
+            {
+                settings.BackgroundAnimationMode = settings.PauseWhenUnfocused
+                    ? PauseWhenUnfocusedMode
+                    : ContinueWhenUnfocusedMode;
+            }
+
             settings.Normalize();
             return settings;
         }
@@ -176,10 +219,17 @@ namespace Intonaco.Core
         }
 
         /// <summary>
-        /// Whether any auto-pause behaviour is currently enabled.
-        /// Both the new foreground-aware toggle and the legacy fullscreen toggle
-        /// are respected, so users upgrading from v1 keep their preference.
-        /// Derived, therefore never persisted.
+        /// Whether Mode A is selected. Derived from the dedicated
+        /// <see cref="BackgroundAnimationMode"/>, never persisted separately.
+        /// </summary>
+        [JsonIgnore]
+        public bool PauseAnimationsWhenUnfocused =>
+            NormalizeBackgroundAnimationMode(BackgroundAnimationMode) == PauseWhenUnfocusedMode;
+
+        /// <summary>
+        /// Whether focus-driven auto-pause is currently enabled. The legacy
+        /// flags are kept in sync by <see cref="Normalize"/>, so this stays
+        /// compatible with code (and tests) that reads either of them.
         /// </summary>
         [JsonIgnore]
         public bool IsAutoPauseEnabled => PauseWhenUnfocused || PauseOnFullscreen;

@@ -236,8 +236,10 @@ namespace Intonaco.Tests
         }
 
         [Fact]
-        public void V2FileWins_OverTheLegacyFlag()
+        public void V2FileWithAutoPauseOff_MigratesToContinueMode()
         {
+            // A v2.0.x user who turned auto-pause off must not silently gain
+            // the new default Mode A when the dedicated setting is added.
             const string v2Json = """
             {
               "pauseOnFullscreen": true,
@@ -247,9 +249,11 @@ namespace Intonaco.Tests
 
             var settings = AppSettings.LoadFromJson(v2Json);
 
+            Assert.Equal(AppSettings.ContinueWhenUnfocusedMode, settings.BackgroundAnimationMode);
+            Assert.False(settings.PauseAnimationsWhenUnfocused);
             Assert.False(settings.PauseWhenUnfocused);
-            Assert.True(settings.PauseOnFullscreen);
-            Assert.True(settings.IsAutoPauseEnabled);
+            Assert.False(settings.PauseOnFullscreen);
+            Assert.False(settings.IsAutoPauseEnabled);
         }
 
         [Fact]

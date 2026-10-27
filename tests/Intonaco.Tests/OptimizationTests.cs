@@ -15,7 +15,7 @@ namespace Intonaco.Tests
     public class OptimizationTests
     {
         [WpfFact]
-        public void PlayerHost_ContainsVideoAndCollapsedPausedFrameLayer()
+        public void PlayerHost_NeverShowsASecondaryStaticFrameLayer()
         {
             var player = new WallpaperPlayer();
             try
@@ -90,8 +90,13 @@ namespace Intonaco.Tests
             Assert.True(snapshot.HandleCount > 0);
         }
 
+        /// <summary>
+        /// Manually pausing must stop animation updates without changing the
+        /// rendering surface. A MediaElement that is closed, collapsed or
+        /// replaced with a bitmap is exactly what exposed black borders.
+        /// </summary>
         [WpfFact]
-        public async Task Player_PauseSuspendsPipelineAndResumeReopensIt()
+        public async Task Player_PauseKeepsRenderingSurfaceAndResumeDoesNotReopen()
         {
             string sample = CreateSampleVideo();
 
@@ -118,21 +123,41 @@ namespace Intonaco.Tests
                     "The generated uncompressed AVI should open through Media Foundation.");
 
                 await Task.Delay(500);
+
+                var host = Assert.IsType<Grid>(window.Content);
+                var media = Assert.IsType<MediaElement>(host.Children[0]);
+                var pausedLayer = Assert.IsType<Image>(host.Children[1]);
+                Uri? openSource = media.Source;
+                Assert.NotNull(openSource);
+
+                int reopenCount = 0;
+                player.MediaOpened += _ => reopenCount++;
+
                 player.Pause();
 
                 Assert.Equal(WallpaperPlayer.PlaybackState.Paused, player.CurrentState);
-                Assert.True(player.IsSuspended);
-                Assert.False(player.HasActiveMediaPipeline);
-                Assert.NotNull(player.PausedFrame);
-                Assert.True(HasVisiblePixels(player.PausedFrame!),
-                    "The suspended wallpaper frame should contain the video, not a black capture.");
+                Assert.False(player.IsSuspended);
+                Assert.True(player.HasActiveMediaPipeline);
+                Assert.Null(player.PausedFrame);
+                Assert.Same(openSource, media.Source);
+                Assert.Equal(Visibility.Visible, media.Visibility);
+                Assert.Equal(Visibility.Collapsed, pausedLayer.Visibility);
+                Assert.Null(pausedLayer.Source);
 
-                Task<bool> resumedOpen = WaitForMediaOpenedAsync(player);
+                // The clock is stopped, so no further animation updates.
+                TimeSpan pausedPosition = player.Position;
+                await Task.Delay(200);
+                Assert.Equal(pausedPosition, player.Position);
+                Assert.Equal(0, reopenCount);
+
                 player.Resume();
 
                 Assert.Equal(WallpaperPlayer.PlaybackState.Playing, player.CurrentState);
                 Assert.True(player.HasActiveMediaPipeline);
-                Assert.True(await resumedOpen);
+                Assert.Same(openSource, media.Source);
+                Assert.Equal(Visibility.Visible, media.Visibility);
+                Assert.Equal(0, reopenCount,
+                    "Resume must not reopen the media source or seek.");
 
                 player.Stop();
                 Assert.Equal(WallpaperPlayer.PlaybackState.Stopped, player.CurrentState);
@@ -145,31 +170,6 @@ namespace Intonaco.Tests
                 player.Dispose();
                 window.Close();
             }
-        }
-
-        private static bool HasVisiblePixels(BitmapSource bitmap)
-        {
-            int stride = (bitmap.PixelWidth * bitmap.Format.BitsPerPixel + 7) / 8;
-            var pixels = new byte[stride * bitmap.PixelHeight];
-            bitmap.CopyPixels(pixels, stride, 0);
-
-            int bytesPerPixel = Math.Max(1, bitmap.Format.BitsPerPixel / 8);
-            for (int y = 0; y < bitmap.PixelHeight; y += 8)
-            {
-                int row = y * stride;
-                for (int x = 0; x < bitmap.PixelWidth; x += 8)
-                {
-                    int pixel = row + x * bytesPerPixel;
-                    if (pixels[pixel] > 20 ||
-                        pixels[pixel + 1] > 20 ||
-                        pixels[pixel + 2] > 20)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
 
         private static string CreateSampleVideo()
