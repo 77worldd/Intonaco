@@ -6,46 +6,49 @@ project owner, then re-encoded for the web.
 
 | File | Purpose | Size |
 | --- | --- | --- |
-| `intonaco-demo.mp4` | Full demo, 1280 px H.264/AAC with `+faststart` so it streams in the browser. This is the canonical video; the player page loads it directly. | ~2.4 MB |
+| `intonaco-demo.mp4` | Full demo, 1280×800 H.264/AAC with `+faststart` so it streams in the browser. This is the canonical video. | ~2.4 MB |
 | `intonaco-demo-preview.gif` | Silent 4.7 s, 800×450, 10 fps loop. GitHub renders GIFs inline, so the demo plays with **zero clicks** on the repository page. | ~3.4 MB |
-| `intonaco-demo-poster.png` | 1280×720 still with a play affordance. Used as the `prefers-reduced-motion` fallback, as the video poster, and reusable as a social/release thumbnail. | ~0.9 MB |
-| `player.html` | Self-contained HTML5 player page (no build, no dependencies) with controls, sound, autoplay-muted and links back to the repo. | ~5 KB |
+| `intonaco-demo-poster.png` | 1280×720 still with a play affordance. Used as the `prefers-reduced-motion` fallback and reusable as a release/social thumbnail. | ~0.9 MB |
 
 The two images are cropped to 16:9 to remove the taskbar and the recorder's
 on-screen indicator; no app UI is hidden.
 
-## Why a linked preview instead of a `<video>` tag
+## How the demo is shown
 
-GitHub's README sanitizer strips `<video>`, `<iframe>` and `<source>` elements,
-and only turns a bare
-`https://github.com/user-attachments/assets/<uuid>` URL into a native inline
-player. Such attachment URLs can only be created by a signed-in browser session
-dragging a file into an issue/PR comment — the upload endpoint rejects Actions
-and App tokens — so a CI job cannot produce one.
+GitHub's README sanitizer strips `<video>`, `<iframe>` and `<source>` elements.
+It only renders a native inline player for a bare
+`https://github.com/user-attachments/assets/<uuid>` URL. Such attachment URLs
+can only be created by a signed-in browser session dragging a file into an
+issue/PR comment — the upload endpoint returns 404 for Actions and App tokens —
+so CI cannot generate one.
 
-There is a second problem: GitHub serves committed `.mp4` files with
+There is a second constraint: GitHub serves committed `.mp4` files with
 `Content-Type: application/octet-stream` plus `nosniff`, so the file viewer and
-`raw.githubusercontent.com` both **download** the video rather than play it —
-regardless of file size. GitHub Pages could serve it with `video/mp4`, but the
-Pages settings API is not available to the integration token used by CI here.
+`raw.githubusercontent.com` both **download** the video rather than play it,
+regardless of size. GitHub Pages could serve it as `video/mp4`, but the Pages
+settings API is not available to the integration token used here.
 
-The result used here is the closest reliable equivalent:
+The README therefore uses three layers:
 
-1. An auto-playing looping preview inline in the README (**zero clicks**).
-2. One click opens `player.html`, a self-contained HTML5 player with controls
-   and sound. It is served with a correct `text/html` / `video/mp4` MIME type by
-   [jsDelivr](https://www.jsdelivr.com/?docs=gh), which mirrors the public repo
-   file directly — no upload, account or external storage involved. The URL is
-   `https://cdn.jsdelivr.net/gh/77worldd/Intonaco@main/docs/demo/player.html`.
-3. A direct MP4 download link, plus the canonical MP4 in this repository.
+1. **Zero clicks** — the looping GIF plays inline on the repository page.
+2. **One click** — the preview links to
+   `https://cdn.jsdelivr.net/gh/77worldd/Intonaco@main/docs/demo/intonaco-demo.mp4`.
+   [jsDelivr](https://www.jsdelivr.com/?docs=gh) mirrors this public repository
+   and serves the MP4 with the correct `video/mp4` MIME type and byte-range
+   support, so the browser opens its own video player with sound, seeking and
+   full-screen controls. No upload, account or external storage is involved —
+   the source of truth is the MP4 committed to `main`.
+3. **Download** — a direct link to the canonical MP4 in the repository.
 
 Visitors who enable reduced motion see the static poster instead of the loop.
-Everything is served from files committed to `main`; if the CDN is unavailable,
-the MP4 can still be downloaded and played locally.
+If the CDN is ever unavailable, the MP4 can still be downloaded and played
+locally. Note that jsDelivr caches `@main` for a short period, so a re-encoded
+video may take a little while to appear; pinning a tag or commit SHA in the URL
+avoids that.
 
 ## Optional upgrade to a native inline player
 
-If you want an actual playable video element embedded in the README:
+If you want an actual playable video element embedded in the README itself:
 
 1. Drag `intonaco-demo.mp4` into the comment box of any issue or PR in this
    repository (or the README editor) while signed in on github.com.
@@ -72,8 +75,8 @@ ffmpeg -ss 8.8 -t 4.7 -i docs/demo/intonaco-demo.mp4 \
 
 # Static poster frame
 ffmpeg -ss 9.5 -i docs/demo/intonaco-demo.mp4 -frames:v 1 \
-  -vf "crop=1280:720:0:50" -update 1 docs/demo/intonaco-demo-poster.png
+  -vf "crop=1280:720:0:50" -update 1 /tmp/frame.png
 ```
 
-The play-button overlay on the poster is drawn with Pillow; see the commit
-history for the exact composition script.
+The play-button overlay on `intonaco-demo-poster.png` is drawn with Pillow over
+`/tmp/frame.png` (a blurred cyan glow, white disc and dark triangle).
