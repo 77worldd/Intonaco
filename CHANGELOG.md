@@ -4,6 +4,33 @@ All notable changes to Intonaco are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-10-27
+
+Major Performance & UI Overhaul. The complete fix & overhaul plan implementation.
+
+### Fixed
+
+- **Black bars on paused wallpaper:** video and static snapshot now always render with `Stretch.UniformToFill` (`object-fit: cover`) filling 100% of the monitor. Wallpaper host window has zero margin/padding, black background, and clipped bounds — no letterboxing in play or pause.
+- **Pause now truly reduces CPU/RAM:** pausing captures the current frame to a bitmap, replaces the video element with a static image, calls `video.pause()`, clears `src` and `load()` to release the Media Foundation decoder, and cancels all animation loops. Resume recreates the decoder and seeks to the saved position.
+- **Frame-rate throttling now affects resources:** `TargetFps` sets `Timeline.DesiredFrameRate` on the MediaElement and engages a `CompositionTarget.Rendering` guard (`FrameRateLimiter`). Switching 60 fps → 30 fps measurably drops GPU/CPU composition cost.
+- **Auto-pause when other apps are in focus:** new `ForegroundDetector` polls the foreground window every 1.2s via `GetForegroundWindow` + process name. If the foreground is not `explorer` (desktop) or `Intonaco` itself, the wallpaper auto-pauses (snapshot & decoder unload) and auto-resumes on return to desktop. Toggle enabled by default, migrated from legacy fullscreen-only setting.
+- **Start with Windows now works:** implements `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` registry entry with `"path" --minimized` on enable and deletion on disable, verified via `StartupManager.IsRegistered`. Silent boot parses `--minimized`/`-m` flags and starts hidden in the tray with wallpaper playing.
+- **Start minimized & Resume last wallpaper:** silent-start logic hides the main UI completely, starts in the system tray, and `AutoPlay` restores `LastWallpaperPath` plus volume/fit/fps/loop settings from `%LocalAppData%\Intonaco\settings.json`.
+- **Unsupported video errors:** `MediaFailed` now maps HRESULT codec errors to a friendly toast — “Unable to play video: Unsupported codec or format. Please use standard MP4 (H.264) or WebM files.” — via tray balloon and dialog, without crashing. Drag-drop validates extensions and shows a clear error.
+
+### Changed
+
+- **Complete Windows 11 UI overhaul (no AI slop):** new Fluent Dark palette — `Background #1E1E1E`, `Card #272727`, `Hover #323232`, subtle `rgba(255,255,255,0.07)` borders, Windows Blue `#60CDFF` accent used sparingly for toggles/primary buttons. Typography `Segoe UI Variable`, 8px card radius, 4px button radius, 32px control height. Light theme updated to matching WinUI light surfaces.
+- **Player window hardened** against black bars and placement drift; ensures layered placement verification and no redirection bitmap handling remains unchanged but visually correct.
+- **Background timers gated** by need: foreground/fullscreen polling runs only while applied and playing (or paused awaiting resume), placement check throttled to 5s playing / 15s paused.
+
+### Added
+
+- New `ForegroundDetector` service and `PauseWhenUnfocused` setting (migrates legacy `PauseOnFullscreen`).
+- Frame-rate limiter integration with measurable resource impact.
+- Enhanced error handling and user notifications for unsupported codecs.
+- Updated verification checklist and release automation for v2.0.0.
+
 ## [1.3.0] — 2026-10-26
 
 Performance and installation release. The user-verified desktop

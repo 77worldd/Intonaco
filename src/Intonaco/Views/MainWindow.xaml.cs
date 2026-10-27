@@ -24,6 +24,7 @@ namespace Intonaco.Views
         private readonly WallpaperPlayer _player;
         private readonly DesktopIntegration _desktop;
         private readonly FullscreenDetector _fullscreenDetector;
+        private readonly ForegroundDetector _foregroundDetector;
         private readonly SystemEventMonitor _systemEvents;
         private PlayerWindow? _playerWindow;
         private readonly ObservableCollection<RecentWallpaperItem> _recentWallpapers =
@@ -32,11 +33,14 @@ namespace Intonaco.Views
         private string? _previewFilePath;
         private bool _previewNeedsPositionSync;
 
-        private static readonly HashSet<string> SupportedVideoExtensions =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ".mp4", ".m4v", ".webm", ".avi", ".wmv", ".mkv", ".mov"
-            };
+        /// <summary>
+        /// Extensions offered by the file dialog. Validation itself is done by
+        /// <see cref="MediaFormatProbe"/> so the dialog, drag-and-drop and the
+        /// player can never disagree about what is supported.
+        /// </summary>
+        private const string VideoDialogFilter =
+            "Video files|*.mp4;*.m4v;*.mov;*.mkv;*.webm;*.avi;*.wmv;*.asf;*.mpg;*.mpeg;*.m2ts;*.ts;*.3gp|" +
+            "All files|*.*";
 
         private sealed class RecentWallpaperItem
         {
@@ -56,9 +60,11 @@ namespace Intonaco.Views
 
         private bool _isApplied;
         private bool _pausedByFullscreen;
+        private bool _pausedByForeground;
         private bool _pausedBySystem;
         private bool _suppressEvents = true;
         private bool _isExiting;
+        private bool _startMinimized;
 
         // Explorer restart detection
         private uint _shellRestartMessage;
@@ -77,6 +83,7 @@ namespace Intonaco.Views
             _player = new WallpaperPlayer();
             _desktop = new DesktopIntegration();
             _fullscreenDetector = new FullscreenDetector();
+            _foregroundDetector = new ForegroundDetector();
             _systemEvents = new SystemEventMonitor();
 
             InitializeComponent();
@@ -91,24 +98,39 @@ namespace Intonaco.Views
             WireEvents();
             InitializeSystemTray();
 
-            // Handle startup args
-            if (_settings.StartMinimized ||
-                Environment.GetCommandLineArgs().Length > 1 &&
-                Environment.GetCommandLineArgs()[1] == "--minimized")
+            // Handle silent boot: --minimized / -m / StartMinimized setting.
+            // StartupUri calls Show() after this constructor returns, so hiding
+            // here alone would still flash the window. Suppress activation now
+            // and hide at SourceInitialized, which fires while the HWND is
+            // being created and before the window is ever presented.
+            _startMinimized = _settings.StartMinimized || StartupManager.ShouldStartMinimized();
+            if (_startMinimized)
             {
-                WindowState = WindowState.Minimized;
+                ShowActivated = false;
                 ShowInTaskbar = false;
-                Hide();
+                WindowState = WindowState.Minimized;
+                SourceInitialized += OnStartMinimizedSourceInitialized;
+                DebugLog.Write(
+                    "Start minimized: launching silently in the system tray " +
+                    $"(StartMinimized={_settings.StartMinimized}, " +
+                    $"flag={StartupManager.ShouldStartMinimized()}).");
             }
 
-            // Auto-play last wallpaper
+            // Auto-play last wallpaper — persisted path + settings restore.
+            // This covers Resume last wallpaper toggle; the config file
+            // stores LastWallpaperPath, volume, fit, fps, etc.
             if (_settings.AutoPlay && !string.IsNullOrEmpty(_settings.LastWallpaperPath) &&
                 File.Exists(_settings.LastWallpaperPath))
             {
                 Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
                 {
+                    DebugLog.Write($"AutoPlay restoring: {_settings.LastWallpaperPath}");
                     ApplyWallpaper(_settings.LastWallpaperPath);
                 });
+            }
+            else if (!string.IsNullOrEmpty(_settings.LastWallpaperPath) && !File.Exists(_settings.LastWallpaperPath))
+            {
+                DebugLog.Write($"AutoPlay: last wallpaper not found: {_settings.LastWallpaperPath}");
             }
         }
 
@@ -116,7 +138,14 @@ namespace Intonaco.Views
         {
             _suppressEvents = true;
 
-            PauseFullscreenToggle.IsChecked = _settings.PauseOnFullscreen;
+            // v2: PauseWhenUnfocused is the primary toggle; keep legacy PauseOnFullscreen in sync.
+            bool pauseEnabled = _settings.PauseWhenUnfocused || _settings.PauseOnFullscreen;
+            try
+            {
+                PauseFullscreenToggle.IsChecked = pauseEnabled;
+            }
+            catch { /* element may not exist if XAML was updated */ }
+
             StartWithWindowsToggle.IsChecked = StartupManager.IsRegistered;
             StartMinimizedToggle.IsChecked = _settings.StartMinimized;
             AutoPlayToggle.IsChecked = _settings.AutoPlay;
@@ -177,8 +206,13 @@ namespace Intonaco.Views
             _player.ErrorOccurred += OnPlayerError;
             _player.MediaOpened += OnMediaOpened;
 
+            // v2: Foreground-aware auto-pause (Lively behaviour). Keep legacy
+            // fullscreen detector as fallback but gate both by IsAutoPauseEnabled.
             _fullscreenDetector.FullscreenStateChanged += OnFullscreenChanged;
-            _fullscreenDetector.IsEnabled = _settings.PauseOnFullscreen;
+            _fullscreenDetector.IsEnabled = _settings.IsAutoPauseEnabled;
+
+            _foregroundDetector.ForegroundStateChanged += OnForegroundChanged;
+            _foregroundDetector.IsEnabled = _settings.IsAutoPauseEnabled;
 
             _systemEvents.ShouldPause += OnSystemPause;
             _systemEvents.ShouldResume += OnSystemResume;
@@ -360,8 +394,7 @@ namespace Intonaco.Views
             }
 
             filePath = files.FirstOrDefault(path =>
-                File.Exists(path) &&
-                SupportedVideoExtensions.Contains(System.IO.Path.GetExtension(path)));
+                File.Exists(path) && MediaFormatProbe.IsSupportedExtension(path));
             return filePath != null;
         }
 
@@ -478,8 +511,7 @@ namespace Intonaco.Views
             var dialog = new OpenFileDialog
             {
                 Title = "Choose wallpaper — Intonaco",
-                Filter = "Video files|*.mp4;*.webm;*.avi;*.wmv;*.mkv;*.mov|" +
-                         "All files|*.*",
+                Filter = VideoDialogFilter,
                 CheckFileExists = true,
                 Multiselect = false
             };
@@ -504,6 +536,15 @@ namespace Intonaco.Views
             BitmapSource? pausedFrame = null)
         {
             ClearError();
+
+            // Validate before tearing down a wallpaper that is currently
+            // working, so a bad file never leaves the desktop empty.
+            if (!MediaFormatProbe.TryValidate(filePath, out string probeError))
+            {
+                DebugLog.Write($"ApplyWallpaper rejected '{filePath}': {probeError}");
+                NotifyPlaybackError(probeError);
+                return;
+            }
 
             // Stop existing playback
             StopWallpaper();
@@ -564,6 +605,7 @@ namespace Intonaco.Views
             _desktop.Detach();
             _isApplied = false;
             _pausedByFullscreen = false;
+            _pausedByForeground = false;
             _pausedBySystem = false;
             UpdateBackgroundTimers();
 
@@ -715,6 +757,7 @@ namespace Intonaco.Views
 
                 PreviewMedia.Stretch = _player.StretchMode;
                 PreviewMedia.SpeedRatio = _player.PlaybackSpeed;
+                ApplyPreviewFrameRateCap(_settings.TargetFps);
                 PreviewMedia.IsMuted = true;
                 PreviewMedia.Play();
                 PreviewMedia.Visibility = Visibility.Visible;
@@ -835,16 +878,23 @@ namespace Intonaco.Views
 
         private void UpdateBackgroundTimers()
         {
-            bool shouldDetectFullscreen =
-                _isApplied &&
-                _settings.PauseOnFullscreen &&
-                (_player.CurrentState == WallpaperPlayer.PlaybackState.Playing ||
-                 _pausedByFullscreen);
+            bool shouldDetect = _isApplied &&
+                                _settings.IsAutoPauseEnabled &&
+                                (_player.CurrentState == WallpaperPlayer.PlaybackState.Playing ||
+                                 _pausedByFullscreen || _pausedByForeground);
 
-            if (shouldDetectFullscreen)
+            if (shouldDetect)
+            {
+                _fullscreenDetector.IsEnabled = _settings.IsAutoPauseEnabled;
+                _foregroundDetector.IsEnabled = _settings.IsAutoPauseEnabled;
                 _fullscreenDetector.Start();
+                _foregroundDetector.Start();
+            }
             else
+            {
                 _fullscreenDetector.Stop();
+                _foregroundDetector.Stop();
+            }
 
             if (_placementTimer == null)
                 return;
@@ -906,6 +956,7 @@ namespace Intonaco.Views
             {
                 _player.Resume();
                 _pausedByFullscreen = false;
+                _pausedByForeground = false;
             }
             else if (!string.IsNullOrEmpty(_settings.LastWallpaperPath) &&
                      File.Exists(_settings.LastWallpaperPath))
@@ -970,10 +1021,18 @@ namespace Intonaco.Views
         {
             if (_suppressEvents) return;
 
-            _settings.PauseOnFullscreen = PauseFullscreenToggle.IsChecked == true;
-            _fullscreenDetector.IsEnabled = _settings.PauseOnFullscreen;
+            bool enabled = false;
+            try { enabled = PauseFullscreenToggle.IsChecked == true; }
+            catch { enabled = _settings.IsAutoPauseEnabled; }
+
+            _settings.PauseWhenUnfocused = enabled;
+            _settings.PauseOnFullscreen = enabled; // keep legacy in sync
+            _fullscreenDetector.IsEnabled = enabled;
+            _foregroundDetector.IsEnabled = enabled;
             _settings.Save();
             UpdateBackgroundTimers();
+
+            DebugLog.Write($"Auto-pause {(enabled ? "enabled" : "disabled")}");
         }
 
         private void OnStartupChanged(object sender, RoutedEventArgs e)
@@ -998,7 +1057,33 @@ namespace Intonaco.Views
             {
                 _settings.TargetFps = fps;
                 _player.TargetFps = fps;
+                ApplyPreviewFrameRateCap(fps);
                 _settings.Save();
+                DebugLog.Write(
+                    $"Frame rate changed to {fps} fps; desktop cap " +
+                    $"{(fps >= 60 ? "cleared" : fps + " fps")} and preview cap re-applied.");
+            }
+        }
+
+        /// <summary>
+        /// Mirrors the desktop player's frame-rate cap onto the in-app preview
+        /// so the two never present at different rates. 60 fps clears the cap.
+        /// </summary>
+        private void ApplyPreviewFrameRateCap(int fps)
+        {
+            try
+            {
+                if (fps >= 60)
+                    PreviewMedia.ClearValue(
+                        System.Windows.Media.Animation.Timeline.DesiredFrameRateProperty);
+                else
+                    PreviewMedia.SetValue(
+                        System.Windows.Media.Animation.Timeline.DesiredFrameRateProperty,
+                        Math.Clamp(fps, 1, 60));
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write($"Preview frame-rate cap failed: {ex.Message}");
             }
         }
 
@@ -1144,6 +1229,7 @@ namespace Intonaco.Views
                         PlayPauseButton.IsEnabled = true;
                         StopButton.IsEnabled = true;
                         StatusText.Text = _pausedByFullscreen ? "Paused (fullscreen)" :
+                                         _pausedByForeground ? "Paused (focus)" :
                                          _pausedBySystem ? "Paused (system)" : "Paused";
                         StatusText.Foreground = FindResource("TextSecondaryBrush") as System.Windows.Media.Brush;
                         TrayPlayPauseItem.Header = "Resume";
@@ -1220,7 +1306,44 @@ namespace Intonaco.Views
 
         private void OnPlayerError(string message)
         {
-            Dispatcher.BeginInvoke(() => ShowError(message));
+            if (Dispatcher.CheckAccess())
+                NotifyPlaybackError(message);
+            else
+                Dispatcher.BeginInvoke(() => NotifyPlaybackError(message));
+        }
+
+        /// <summary>
+        /// Surfaces a playback failure everywhere the user might be looking:
+        /// the footer, a tray balloon (the app normally runs hidden), and a
+        /// dialog when the main window is already open. Unsupported codecs are
+        /// the common case, so the wording always states what to do instead of
+        /// leaving a silent black desktop behind.
+        /// </summary>
+        private void NotifyPlaybackError(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message) || _isExiting)
+                return;
+
+            ShowError(message);
+            DebugLog.Write($"Playback error shown to user: {message}");
+
+            try
+            {
+                TrayIcon.ShowBalloonTip(
+                    "Intonaco",
+                    message,
+                    Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write($"Tray notification failed: {ex.Message}");
+            }
+
+            if (IsVisible && WindowState != WindowState.Minimized)
+            {
+                MessageBox.Show(this, message, "Intonaco — Video error",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void OnMediaOpened(TimeSpan duration)
@@ -1244,14 +1367,41 @@ namespace Intonaco.Views
             {
                 if (isFullscreen && _player.CurrentState == WallpaperPlayer.PlaybackState.Playing)
                 {
+                    DebugLog.Write("Auto-pause: fullscreen app detected");
                     _pausedByFullscreen = true;
                     _player.Pause();
                 }
                 else if (!isFullscreen && _pausedByFullscreen)
                 {
                     _pausedByFullscreen = false;
-                    if (!_pausedBySystem)
+                    if (!_pausedBySystem && !_pausedByForeground)
+                    {
+                        DebugLog.Write("Auto-resume: fullscreen app left");
                         _player.Resume();
+                    }
+                }
+            });
+        }
+
+        private void OnForegroundChanged(bool isDesktopForeground)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                ForegroundDetector.IsForegroundDesktop(out string proc);
+                if (!isDesktopForeground && _player.CurrentState == WallpaperPlayer.PlaybackState.Playing)
+                {
+                    DebugLog.Write($"Auto-pause: foreground is '{proc}' (not desktop)");
+                    _pausedByForeground = true;
+                    _player.Pause();
+                }
+                else if (isDesktopForeground && _pausedByForeground)
+                {
+                    _pausedByForeground = false;
+                    if (!_pausedBySystem && !_pausedByFullscreen)
+                    {
+                        DebugLog.Write($"Auto-resume: foreground returned to desktop ('{proc}')");
+                        _player.Resume();
+                    }
                 }
             });
         }
@@ -1262,6 +1412,7 @@ namespace Intonaco.Views
             {
                 if (_player.CurrentState == WallpaperPlayer.PlaybackState.Playing)
                 {
+                    DebugLog.Write("System pause (lock/sleep)");
                     _pausedBySystem = true;
                     _player.Pause();
                 }
@@ -1273,8 +1424,10 @@ namespace Intonaco.Views
             Dispatcher.BeginInvoke(() =>
             {
                 _pausedBySystem = false;
-                if (!_pausedByFullscreen && _player.CurrentState == WallpaperPlayer.PlaybackState.Paused)
+                if (!_pausedByFullscreen && !_pausedByForeground &&
+                    _player.CurrentState == WallpaperPlayer.PlaybackState.Paused)
                 {
+                    DebugLog.Write("System resume (unlock/wake)");
                     // Small delay after wake to let display stabilize
                     var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
                     timer.Tick += (_, _) =>
@@ -1361,6 +1514,20 @@ namespace Intonaco.Views
             }
         }
 
+        /// <summary>
+        /// Silent-boot completion: the HWND now exists but has not been
+        /// presented, so hiding here starts Intonaco straight in the tray with
+        /// the wallpaper already playing and no window flash.
+        /// </summary>
+        private void OnStartMinimizedSourceInitialized(object? sender, EventArgs e)
+        {
+            SourceInitialized -= OnStartMinimizedSourceInitialized;
+            _startMinimized = false;
+            ShowInTaskbar = false;
+            Hide();
+            DebugLog.Write("Start minimized: window suppressed, running from the tray.");
+        }
+
         private void OnWindowClosing(object? sender, CancelEventArgs e)
         {
             FlushSettingsSave();
@@ -1377,6 +1544,7 @@ namespace Intonaco.Views
             _placementTimer?.Stop();
             _settingsSaveTimer?.Stop();
             _fullscreenDetector.Dispose();
+            _foregroundDetector.Dispose();
             _systemEvents.Dispose();
             StopWallpaper();
             _player.Dispose();
@@ -1405,6 +1573,21 @@ namespace Intonaco.Views
 
         private void OnTrayToggleMute(object sender, RoutedEventArgs e) =>
             OnToggleMute(sender, e);
+
+        /// <summary>
+        /// Tray "Choose video…" — the file dialog needs an owner window, so the
+        /// main window is restored first when Intonaco is sitting in the tray.
+        /// </summary>
+        private void OnTrayChooseVideo(object sender, RoutedEventArgs e)
+        {
+            if (!IsVisible || WindowState == WindowState.Minimized)
+                ShowMainWindow();
+
+            OnChooseFile(sender, e);
+        }
+
+        /// <summary>Tray "Settings" simply brings the settings window forward.</summary>
+        private void OnTraySettings(object sender, RoutedEventArgs e) => ShowMainWindow();
 
         private void OnTrayExit(object sender, RoutedEventArgs e)
         {

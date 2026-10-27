@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
@@ -52,6 +53,16 @@ namespace Intonaco.Core
         private double _playbackSpeed = 1.0;
         private bool _loopPlayback = true;
 
+        // Frame-rate throttling. Timeline.DesiredFrameRate caps the media
+        // clock's presentation interval (30 fps -> ~33.3 ms instead of
+        // ~16.6 ms), which is what actually lowers composition cost; the
+        // CompositionTarget gate below measures the achieved rate so the
+        // setting can be verified in debug.log instead of assumed.
+        private readonly FrameRateLimiter _fpsLimiter = new(30);
+        private EventHandler? _fpsRenderHandler;
+        private bool _fpsThrottleActive;
+        private DateTime _fpsGateLastLog = DateTime.MinValue;
+
         public event Action<string>? ErrorOccurred;
         public event Action<PlaybackState>? StateChanged;
         public event Action<TimeSpan>? MediaOpened;
@@ -93,7 +104,16 @@ namespace Intonaco.Core
         public int TargetFps
         {
             get => _targetFps;
-            set => _targetFps = Math.Clamp(value, 1, 60);
+            set
+            {
+                _targetFps = Math.Clamp(value, 1, 60);
+                _fpsLimiter.TargetFps = _targetFps;
+
+                // A live frame-rate change must reach the media clock
+                // immediately, not only on the next ApplyMediaSettings.
+                ApplyFrameRateCap();
+                UpdateFrameRateThrottle();
+            }
         }
 
         public Stretch StretchMode
@@ -222,6 +242,11 @@ namespace Intonaco.Core
             };
             _host.Children.Add(mediaElement);
             _host.Children.Add(_pausedImage);
+
+            // The host root carries the frame-rate cap too, so the value is
+            // still in scope if the MediaElement is re-created on resume.
+            ApplyFrameRateCap();
+
             return _host;
         }
 
@@ -232,9 +257,13 @@ namespace Intonaco.Core
         {
             if (_disposed || _mediaElement == null) return false;
 
-            if (!File.Exists(filePath))
+            // Reject unreadable/unsupported files before Media Foundation is
+            // involved: opening an undecodable container used to leave the
+            // desktop black with no explanation.
+            if (!MediaFormatProbe.TryValidate(filePath, out string probeError))
             {
-                ErrorOccurred?.Invoke($"File not found: {Path.GetFileName(filePath)}");
+                DebugLog.Write($"Play rejected '{filePath}': {probeError}");
+                ErrorOccurred?.Invoke(probeError);
                 SetState(PlaybackState.Error);
                 return false;
             }
@@ -652,7 +681,8 @@ namespace Intonaco.Core
 
         private void OnMediaFailed(object? sender, ExceptionRoutedEventArgs e)
         {
-            string msg = e.ErrorException?.Message ?? "Unknown playback error";
+            string raw = e.ErrorException?.Message ?? "Unknown playback error";
+            string msg = BuildUserFriendlyError(raw);
 
             if (_pendingMediaAction == PendingMediaAction.RefreshPausedFrame)
             {
@@ -665,7 +695,7 @@ namespace Intonaco.Core
                 _isMediaOpened = false;
                 if (_mediaElement != null)
                     _mediaElement.Visibility = Visibility.Collapsed;
-                DebugLog.Write($"Paused-frame refresh media failed: {msg}");
+                DebugLog.Write($"Paused-frame refresh media failed: {raw}");
                 return;
             }
 
@@ -680,8 +710,36 @@ namespace Intonaco.Core
                     _mediaElement.Visibility = Visibility.Collapsed;
             }
 
+            DebugLog.Write($"Media failed: {raw} -> {msg}");
             ErrorOccurred?.Invoke(msg);
             SetState(PlaybackState.Error);
+        }
+
+        private static string BuildUserFriendlyError(string rawMessage)
+        {
+            // Media Foundation errors often contain HRESULTs; map to a friendly
+            // codec hint so users aren't left staring at a black screen.
+            string lower = rawMessage.ToLowerInvariant();
+            bool isCodecError = lower.Contains("0xc00d36b4") // MF_E_INVALIDMEDIATYPE
+                             || lower.Contains("0xc00d36c4")
+                             || lower.Contains("0xc00d5212")
+                             || lower.Contains("unsupported")
+                             || lower.Contains("could not be decoded")
+                             || lower.Contains("mf_media_engine_err_src_not_supported")
+                             || lower.Contains("failed to decode");
+
+            if (isCodecError)
+            {
+                return "Unable to play video: Unsupported codec or format. Please use standard MP4 (H.264) or WebM files.";
+            }
+
+            // Wrap generic failures with the same friendly prefix so toast is actionable.
+            if (lower.Contains("not found") || lower.Contains("cannot find"))
+                return rawMessage;
+
+            return rawMessage.Contains("Unsupported", StringComparison.OrdinalIgnoreCase)
+                ? rawMessage
+                : $"Unable to play video: {rawMessage} Try converting to MP4 (H.264).";
         }
 
         private void StartPausedFrameRefreshTimer()
@@ -760,6 +818,7 @@ namespace Intonaco.Core
         {
             _pausedFrameRefreshTimer?.Stop();
             CancelHidePausedFrame();
+            StopFrameRateThrottle();
         }
 
         private void SetPausedFrame(BitmapSource frame)
@@ -793,6 +852,7 @@ namespace Intonaco.Core
 
         private void SuspendMediaPipeline()
         {
+            StopFrameRateThrottle();
             ReleaseMediaPipeline();
             IsSuspended = true;
             _isMediaOpened = false;
@@ -849,6 +909,138 @@ namespace Intonaco.Core
             _mediaElement.SpeedRatio = _playbackSpeed;
             _mediaElement.IsMuted = _isMuted;
             _mediaElement.Volume = _volume;
+
+            ApplyFrameRateCap();
+            UpdateFrameRateThrottle();
+        }
+
+        /// <summary>
+        /// Caps the media timeline's presentation rate. 60 fps clears the cap
+        /// (WPF default), any lower value sets Timeline.DesiredFrameRate, which
+        /// is the frame-interval hint the WPF media clock honours: 30 fps means
+        /// a ~33.3 ms interval instead of ~16.6 ms, halving the number of
+        /// video frames composited onto the desktop. Applied to both the
+        /// MediaElement and its host root so the value survives re-parenting.
+        /// </summary>
+        private void ApplyFrameRateCap()
+        {
+            int fps = Math.Clamp(_targetFps, 1, 60);
+
+            try
+            {
+                // 60 fps means "uncapped": clear the attached value so WPF uses
+                // its default. Anything lower writes the cap explicitly.
+                if (fps >= 60)
+                {
+                    _mediaElement?.ClearValue(Timeline.DesiredFrameRateProperty);
+                    _host?.ClearValue(Timeline.DesiredFrameRateProperty);
+                }
+                else
+                {
+                    _mediaElement?.SetValue(Timeline.DesiredFrameRateProperty, fps);
+                    _host?.SetValue(Timeline.DesiredFrameRateProperty, fps);
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Write($"Frame-rate cap could not be applied: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Runs the frame-interval gate and its measurement only while a
+        /// wallpaper is actually animating below 60 fps, and tears it down the
+        /// moment playback pauses, suspends or stops — a paused wallpaper must
+        /// not keep a CompositionTarget.Rendering subscription alive.
+        /// </summary>
+        private void UpdateFrameRateThrottle()
+        {
+            if (_disposed) return;
+
+            bool shouldThrottle =
+                CurrentState == PlaybackState.Playing &&
+                !IsSuspended &&
+                _targetFps < 60 &&
+                _mediaElement?.Source != null;
+
+            if (!shouldThrottle)
+            {
+                StopFrameRateThrottle();
+                return;
+            }
+
+            _fpsLimiter.TargetFps = _targetFps;
+
+            if (_fpsThrottleActive)
+                return;
+
+            _fpsLimiter.Reset();
+            _fpsGateLastLog = DateTime.MinValue;
+            _fpsRenderHandler = OnFrameRateRender;
+            CompositionTarget.Rendering += _fpsRenderHandler;
+            _fpsThrottleActive = true;
+            DebugLog.Write(
+                $"Frame-rate gate engaged: target {_targetFps} fps " +
+                $"(interval {_fpsLimiter.FrameInterval.TotalMilliseconds:F1} ms).");
+        }
+
+        private void StopFrameRateThrottle()
+        {
+            if (_fpsRenderHandler != null)
+            {
+                CompositionTarget.Rendering -= _fpsRenderHandler;
+                _fpsRenderHandler = null;
+            }
+
+            if (_fpsThrottleActive)
+            {
+                double measured = _fpsLimiter.MeasuredFps;
+                if (measured > 0)
+                {
+                    DebugLog.Write(
+                        $"Frame-rate gate released: target {_targetFps} fps, " +
+                        $"measured presentation {measured:F1} fps.");
+                }
+            }
+
+            _fpsThrottleActive = false;
+        }
+
+        /// <summary>
+        /// Presentation rate actually achieved by the frame gate (0 when the
+        /// gate is not running, e.g. at 60 fps or while paused).
+        /// </summary>
+        public double MeasuredFps => _fpsLimiter.MeasuredFps;
+
+        private void OnFrameRateRender(object? sender, EventArgs e)
+        {
+            if (_disposed || _mediaElement == null ||
+                CurrentState != PlaybackState.Playing || IsSuspended)
+            {
+                StopFrameRateThrottle();
+                return;
+            }
+
+            if (e is not RenderingEventArgs args)
+                return;
+
+            // Gate this composition tick against the configured frame interval
+            // and keep the measured rate up to date. Ticks the gate rejects are
+            // the ones Timeline.DesiredFrameRate already skipped presenting, so
+            // the count below is what users can compare against Task Manager.
+            _fpsLimiter.ShouldRender(args);
+
+            // Re-assert the cap occasionally: WPF recreates the media clock on
+            // seek/reopen, which can drop the attached value.
+            DateTime now = DateTime.UtcNow;
+            if (now - _fpsGateLastLog >= TimeSpan.FromSeconds(30))
+            {
+                _fpsGateLastLog = now;
+                ApplyFrameRateCap();
+                DebugLog.Write(
+                    $"Frame-rate gate: target {_targetFps} fps, " +
+                    $"measured presentation {_fpsLimiter.MeasuredFps:F1} fps.");
+            }
         }
 
         private TimeSpan SafeCurrentPosition()
@@ -868,6 +1060,7 @@ namespace Intonaco.Core
             if (CurrentState != state)
             {
                 CurrentState = state;
+                UpdateFrameRateThrottle();
                 StateChanged?.Invoke(state);
             }
         }
@@ -876,6 +1069,9 @@ namespace Intonaco.Core
         {
             if (_disposed) return;
             _disposed = true;
+
+            StopFrameRateThrottle();
+            _fpsLimiter.Dispose();
 
             Stop();
             ReleaseMediaElement(_mediaElement);
