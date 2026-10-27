@@ -90,6 +90,11 @@ namespace Intonaco.Core
                 _timer.Stop();
                 _timer = null;
             }
+
+            // Mode B stops the detector. Forget the last focus state so a
+            // later switch back to Mode A while another app is focused still
+            // raises a fresh "not desktop" event and pauses animation.
+            _isDesktopForeground = true;
         }
 
         private void OnTick(object? sender, EventArgs e)

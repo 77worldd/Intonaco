@@ -13,12 +13,16 @@ namespace Intonaco.Core
     /// Manages video wallpaper playback using WPF MediaElement backed by
     /// Windows Media Foundation for native hardware-accelerated decoding.
     ///
-    /// Pausing is deliberately stronger than MediaElement.Pause(): the
-    /// currently displayed frame is captured into one static bitmap, the
-    /// Media Foundation source is closed, and the decoder and its frame
-    /// queues are released. Resuming reopens the file, seeks back to the
-    /// paused position, and removes the static image only after WPF has had
-    /// an opportunity to present decoded frames again.
+    /// Pause stops *animation updates only*: it pauses the media clock and
+    /// leaves the source, the decoded frame, the MediaElement and all of its
+    /// geometry exactly as they were. WPF MediaElement presents video through
+    /// a native Media Foundation surface that is not part of the managed
+    /// visual tree, so a RenderTargetBitmap "photograph" of that element is
+    /// not a faithful copy of the desktop: it can contain black bands or
+    /// blocks, and closing the source destroys the only surface that held
+    /// the real frame. Swapping the live surface for a bitmap on pause is
+    /// what produced black borders. Resume is therefore just Play() on the
+    /// same pipeline - no reopen, no seek, no frame replacement.
     /// </summary>
     public sealed class WallpaperPlayer : IDisposable
     {
@@ -30,7 +34,8 @@ namespace Intonaco.Core
         {
             None,
             Resume,
-            RefreshPausedFrame
+            RefreshPausedFrame,
+            RestorePausedPosition
         }
 
         private MediaElement? _mediaElement;
@@ -81,11 +86,16 @@ namespace Intonaco.Core
         public bool IsMuted => _isMuted;
 
         /// <summary>
-        /// True when Pause has fully closed the Media Foundation pipeline and
-        /// the desktop is being presented from <see cref="PausedFrame"/>.
+        /// Legacy suspension flag, retained for the dormant static-frame
+        /// helpers below. Pause no longer closes the Media Foundation
+        /// pipeline, so this is always false in normal operation.
         /// </summary>
         public bool IsSuspended { get; private set; }
 
+        /// <summary>
+        /// Legacy frozen-frame bitmap. Always null now: the live MediaElement
+        /// keeps presenting the last decoded frame while paused.
+        /// </summary>
         public BitmapSource? PausedFrame => _pausedFrame;
 
         internal bool HasActiveMediaPipeline => _mediaElement?.Source != null;
@@ -126,11 +136,11 @@ namespace Intonaco.Core
                 if (_mediaElement != null)
                     _mediaElement.Stretch = value;
 
-                // A suspended frame has the previous fit baked into the
-                // desktop-sized capture. Reopen briefly behind that image,
-                // recapture with the new fit, then close the decoder again.
-                if (changed && IsSuspended && CurrentState == PlaybackState.Paused)
-                    RefreshPausedFrame();
+                // The live surface is still the element being rendered while
+                // paused, so its Stretch assignment above is all that is
+                // needed - no recapture or decoder reopen.
+                if (changed && _pausedImage != null && _pausedImage.Visibility == Visibility.Visible)
+                    _pausedImage.Stretch = Stretch.UniformToFill;
             }
         }
 
@@ -162,7 +172,12 @@ namespace Intonaco.Core
         {
             get
             {
-                if (IsSuspended || _pendingMediaAction == PendingMediaAction.RefreshPausedFrame)
+                // While paused, the clock is stopped but the source stays
+                // open; report the position captured at pause time so a
+                // recovery/reopen cannot jump to a different frame.
+                if (IsSuspended ||
+                    CurrentState == PlaybackState.Paused ||
+                    _pendingMediaAction == PendingMediaAction.RestorePausedPosition)
                     return _pausedPosition;
 
                 try
@@ -219,8 +234,10 @@ namespace Intonaco.Core
         }
 
         /// <summary>
-        /// Creates the desktop host: the live MediaElement below a static
-        /// Image used only while the media pipeline is suspended.
+        /// Creates the desktop host. The MediaElement is the single rendering
+        /// surface for every state (playing, paused, auto-paused). The
+        /// secondary Image is a dormant compatibility layer that is never
+        /// shown - no pause path captures or swaps a bitmap any more.
         /// </summary>
         public FrameworkElement CreateHost()
         {
@@ -307,10 +324,16 @@ namespace Intonaco.Core
         }
 
         /// <summary>
-        /// Pauses playback and, when a frame can be captured, closes the
-        /// decoder so a paused wallpaper costs like a static image. If frame
-        /// capture is unavailable, this safely falls back to a native
-        /// MediaElement pause instead of replacing the desktop with black.
+        /// Stops animation updates without changing anything on screen.
+        ///
+        /// The last decoded frame is still presented by the same MediaElement
+        /// with the same Stretch, size and position as one tick earlier. The
+        /// source is deliberately NOT closed and the element is NOT collapsed:
+        /// the WPF MediaElement video surface is a native Media Foundation
+        /// target, and tearing it down (or replacing it with a bitmap) is what
+        /// exposed black borders/blocks around a paused wallpaper. This is
+        /// exactly the v1 pause behaviour, restored while keeping all later
+        /// features (fps cap, preview, auto-pause, fit/speed settings).
         /// </summary>
         public void Pause()
         {
@@ -318,36 +341,25 @@ namespace Intonaco.Core
 
             try
             {
+                CancelPendingFrameWork();
+                _pendingMediaAction = PendingMediaAction.None;
+
+                // One operation stops all animation updates: the media clock.
                 _mediaElement.Pause();
                 _pausedPosition = SafeCurrentPosition();
                 _isPaused = true;
 
-                BitmapSource? frame = CaptureCurrentFrame();
-                if (frame != null)
-                {
-                    SetPausedFrame(frame);
-                    SuspendMediaPipeline();
-                    DebugLog.Write(
-                        $"Wallpaper suspended at {_pausedPosition}; " +
-                        $"static frame {frame.PixelWidth}x{frame.PixelHeight}.");
-                }
-                else if (!_isMediaOpened)
-                {
-                    // There is no decoded frame to preserve yet. Closing the
-                    // half-open source still avoids retaining the pipeline.
-                    ClearPausedFrame();
-                    SuspendMediaPipeline();
-                    DebugLog.Write("Wallpaper suspended before its first frame.");
-                }
-                else
-                {
-                    IsSuspended = false;
-                    DebugLog.Write(
-                        "Paused-frame capture was unavailable; using native " +
-                        "MediaElement pause as a visual fallback.");
-                }
+                // The rendering surface is the MediaElement itself. Nothing is
+                // hidden, cleared, collapsed or overlaid, so the background
+                // stays fully rendered while animation updates are stopped.
+                IsSuspended = false;
+                _mediaElement.Visibility = Visibility.Visible;
+                ClearPausedFrame();
 
                 SetState(PlaybackState.Paused);
+                DebugLog.Write(
+                    $"Wallpaper paused in place at {_pausedPosition}; " +
+                    "media surface kept (no frame capture, no source close).");
             }
             catch (Exception ex)
             {
@@ -356,11 +368,12 @@ namespace Intonaco.Core
         }
 
         /// <summary>
-        /// Suspends at an already-known position/frame. Explorer-restart
-        /// recovery uses this to preserve the exact paused desktop while it
-        /// creates a new player window.
+        /// Restores a paused wallpaper after Explorer-restart recovery at the
+        /// position it was paused at. The desktop still renders through the
+        /// live MediaElement: no frozen bitmap is carried over from the
+        /// previous (now destroyed) player window.
         /// </summary>
-        internal void PauseAt(TimeSpan position, BitmapSource? frame)
+        internal void PauseAt(TimeSpan position)
         {
             if (_disposed || _mediaElement == null ||
                 (CurrentState != PlaybackState.Playing && CurrentState != PlaybackState.Paused))
@@ -370,16 +383,28 @@ namespace Intonaco.Core
 
             try
             {
+                CancelPendingFrameWork();
+                _pendingMediaAction = PendingMediaAction.None;
                 _mediaElement.Pause();
                 _pausedPosition = position < TimeSpan.Zero ? TimeSpan.Zero : position;
                 _isPaused = true;
+                IsSuspended = false;
+                _mediaElement.Visibility = Visibility.Visible;
+                ClearPausedFrame();
 
-                if (frame != null)
-                    SetPausedFrame(frame);
+                if (_isMediaOpened)
+                {
+                    ApplyPausedPosition();
+                }
                 else
-                    ClearPausedFrame();
+                {
+                    // The source has not opened yet: Pause() before MediaOpened
+                    // is not always honoured, so MediaOpened must repeat the
+                    // pause (and the seek when there is a saved position).
+                    _pendingPosition = _pausedPosition;
+                    _pendingMediaAction = PendingMediaAction.RestorePausedPosition;
+                }
 
-                SuspendMediaPipeline();
                 SetState(PlaybackState.Paused);
             }
             catch (Exception ex)
@@ -388,9 +413,34 @@ namespace Intonaco.Core
             }
         }
 
+        /// <summary>Seeks a paused (but open) source to its frozen position.</summary>
+        private void ApplyPausedPosition()
+        {
+            if (_mediaElement == null || _pausedPosition <= TimeSpan.Zero)
+                return;
+
+            if (Duration > TimeSpan.Zero && _pausedPosition > Duration)
+                _pausedPosition = Duration;
+
+            try
+            {
+                // ScrubbingEnabled is set on the element, so WPF asks Media
+                // Foundation to present the frame at this position while the
+                // clock remains paused.
+                _mediaElement.Position = _pausedPosition;
+            }
+            catch
+            {
+                // Some containers cannot seek before a keyframe; staying at
+                // the current frame is still visually correct.
+            }
+        }
+
         /// <summary>
-        /// Resumes playback, reopening and seeking the media source first if
-        /// Pause had suspended it.
+        /// Restarts animation updates on the very same rendering surface.
+        /// Because Pause never closed the source, there is no reopen, no seek,
+        /// no decoder warm-up and no frame swap - resume is a single Play()
+        /// on the clock that was paused, so there is no flicker or jump.
         /// </summary>
         public void Resume()
         {
@@ -398,72 +448,24 @@ namespace Intonaco.Core
 
             try
             {
-                if (_pendingMediaAction == PendingMediaAction.RefreshPausedFrame)
-                {
-                    // A fit-change recapture already reopened the source.
-                    // Convert it into a normal resume without another open.
-                    _pausedFrameRefreshTimer?.Stop();
-                    _pendingMediaAction = PendingMediaAction.Resume;
-                    _pendingPosition = _pausedPosition;
-                    _isPaused = false;
-                    ApplyMediaSettings();
-                    SetState(PlaybackState.Playing);
-
-                    if (_isMediaOpened)
-                    {
-                        _pendingMediaAction = PendingMediaAction.None;
-                        _mediaElement.Play();
-                        HidePausedFrameAfterRender();
-                    }
-                    return;
-                }
-
-                if (!IsSuspended)
-                {
-                    // Native-pause fallback: the source is still open.
-                    if (Duration > TimeSpan.Zero &&
-                        _mediaElement.Position >= Duration - TimeSpan.FromMilliseconds(250))
-                    {
-                        _mediaElement.Position = TimeSpan.Zero;
-                    }
-                    ApplyMediaSettings();
-                    _mediaElement.Play();
-                    _isPaused = false;
-                    ClearPausedFrame();
-                    SetState(PlaybackState.Playing);
-                    return;
-                }
-
-                if (_currentSource == null)
-                    return;
-
-                string path = _currentSource.LocalPath;
-                if (!File.Exists(path))
-                {
-                    ErrorOccurred?.Invoke($"File not found: {Path.GetFileName(path)}");
-                    SetState(PlaybackState.Error);
-                    return;
-                }
-
-                _pendingPosition = _pausedPosition;
-                if (Duration > TimeSpan.Zero &&
-                    _pendingPosition >= Duration - TimeSpan.FromMilliseconds(250))
-                {
-                    _pendingPosition = TimeSpan.Zero;
-                }
-
-                _pendingMediaAction = PendingMediaAction.Resume;
+                CancelHidePausedFrame();
+                _pausedFrameRefreshTimer?.Stop();
+                _pendingMediaAction = PendingMediaAction.None;
                 IsSuspended = false;
-                _isMediaOpened = false;
                 _mediaElement.Visibility = Visibility.Visible;
-                _mediaElement.Source = _currentSource;
-                ApplyMediaSettings();
 
-                // Start the clock now; MediaOpened performs the exact seek
-                // before the paused image is removed, so no wrong frame or
-                // black flash is presented.
+                // Non-looping clips that ended are restarted from the start;
+                // every other resume continues at the exact paused frame.
+                if (Duration > TimeSpan.Zero &&
+                    SafeCurrentPosition() >= Duration - TimeSpan.FromMilliseconds(250))
+                {
+                    _mediaElement.Position = TimeSpan.Zero;
+                }
+
+                ApplyMediaSettings();
                 _mediaElement.Play();
                 _isPaused = false;
+                ClearPausedFrame();
                 SetState(PlaybackState.Playing);
             }
             catch (Exception ex)
@@ -479,6 +481,9 @@ namespace Intonaco.Core
         /// </summary>
         public void RefreshPausedFrame()
         {
+            // Legacy static-frame path. No pause path suspends the pipeline
+            // any more, so this is unreachable in normal operation; it stays
+            // defensive for any external caller of an older API.
             if (_disposed || _mediaElement == null || _currentSource == null ||
                 CurrentState != PlaybackState.Paused || !IsSuspended ||
                 _pendingMediaAction != PendingMediaAction.None)
@@ -527,6 +532,7 @@ namespace Intonaco.Core
             IsSuspended = false;
             _isMediaOpened = false;
             _pausedPosition = TimeSpan.Zero;
+            _pendingMediaAction = PendingMediaAction.None;
             _pendingPosition = TimeSpan.Zero;
             ClearPausedFrame();
             Duration = TimeSpan.Zero;
@@ -786,7 +792,15 @@ namespace Intonaco.Core
 
                     ApplyMediaSettings();
 
-                    if (action == PendingMediaAction.Resume)
+                    if (action == PendingMediaAction.RestorePausedPosition)
+                    {
+                        // Explorer-restart recovery: seek on the live surface
+                        // and leave the clock paused. Never start playback.
+                        _mediaElement.Pause();
+                        ApplyPausedPosition();
+                        ApplyMediaSettings();
+                    }
+                    else if (action == PendingMediaAction.Resume)
                     {
                         _mediaElement.Play();
                         HidePausedFrameAfterRender();
@@ -973,14 +987,14 @@ namespace Intonaco.Core
             StopFrameRateThrottle();
         }
 
+        // The methods below are the legacy static-frame subsystem. They are
+        // deliberately NOT called by Pause, Resume, PauseAt or any focus path:
+        // replacing the native MediaElement surface with a bitmap is the
+        // regression that caused black borders. They remain only so the
+        // geometry helpers stay available to tests and diagnostics.
         private void SetPausedFrame(BitmapSource frame)
         {
-            // Final gate. Every path that shows a frozen frame — Pause,
-            // PauseAt during explorer-restart recovery (which carries a frame
-            // captured against the *previous* desktop host), and
-            // RefreshPausedFrame — funnels through here, so cropping to the
-            // current desktop aspect at this point makes black bars impossible
-            // no matter which path produced the bitmap.
+            // Legacy helper: crop any captured frame to the host aspect.
             double hostAspect = HostAspectRatio();
             BitmapSource shown = CentreCropToAspect(frame, hostAspect);
 

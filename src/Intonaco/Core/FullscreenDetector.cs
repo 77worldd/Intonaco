@@ -83,6 +83,10 @@ namespace Intonaco.Core
                 _timer.Tick -= OnTimerTick;
                 _timer = null;
             }
+
+            // See ForegroundDetector.Stop: a stopped detector must not keep
+            // a stale state when Mode A is selected again.
+            _isFullscreen = false;
         }
 
         private void OnTimerTick(object? sender, EventArgs e)
