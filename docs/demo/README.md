@@ -6,9 +6,10 @@ project owner, then re-encoded for the web.
 
 | File | Purpose | Size |
 | --- | --- | --- |
-| `intonaco-demo.mp4` | Full demo, 1280 px H.264/AAC with `+faststart` so it streams in the browser. Click target for the images below. | ~2.4 MB |
+| `intonaco-demo.mp4` | Full demo, 1280 px H.264/AAC with `+faststart` so it streams in the browser. This is the canonical video; the player page loads it directly. | ~2.4 MB |
 | `intonaco-demo-preview.gif` | Silent 4.7 s, 800×450, 10 fps loop. GitHub renders GIFs inline, so the demo plays with **zero clicks** on the repository page. | ~3.4 MB |
-| `intonaco-demo-poster.png` | 1280×720 still with a play affordance. Used as the `prefers-reduced-motion` fallback and can be reused as a social/release thumbnail. | ~0.9 MB |
+| `intonaco-demo-poster.png` | 1280×720 still with a play affordance. Used as the `prefers-reduced-motion` fallback, as the video poster, and reusable as a social/release thumbnail. | ~0.9 MB |
+| `player.html` | Self-contained HTML5 player page (no build, no dependencies) with controls, sound, autoplay-muted and links back to the repo. | ~5 KB |
 
 The two images are cropped to 16:9 to remove the taskbar and the recorder's
 on-screen indicator; no app UI is hidden.
@@ -22,10 +23,25 @@ player. Such attachment URLs can only be created by a signed-in browser session
 dragging a file into an issue/PR comment — the upload endpoint rejects Actions
 and App tokens — so a CI job cannot produce one.
 
-The result used here is the closest reliable equivalent: an auto-playing loop
-inline in the README, wrapped in a link that opens the full MP4 (GitHub's file
-viewer plays it with controls and sound), plus a direct MP4 download link. If
-you reduce motion in your OS settings, the static poster is shown instead.
+There is a second problem: GitHub serves committed `.mp4` files with
+`Content-Type: application/octet-stream` plus `nosniff`, so the file viewer and
+`raw.githubusercontent.com` both **download** the video rather than play it —
+regardless of file size. GitHub Pages could serve it with `video/mp4`, but the
+Pages settings API is not available to the integration token used by CI here.
+
+The result used here is the closest reliable equivalent:
+
+1. An auto-playing looping preview inline in the README (**zero clicks**).
+2. One click opens `player.html`, a self-contained HTML5 player with controls
+   and sound. It is served with a correct `text/html` / `video/mp4` MIME type by
+   [jsDelivr](https://www.jsdelivr.com/?docs=gh), which mirrors the public repo
+   file directly — no upload, account or external storage involved. The URL is
+   `https://cdn.jsdelivr.net/gh/77worldd/Intonaco@main/docs/demo/player.html`.
+3. A direct MP4 download link, plus the canonical MP4 in this repository.
+
+Visitors who enable reduced motion see the static poster instead of the loop.
+Everything is served from files committed to `main`; if the CDN is unavailable,
+the MP4 can still be downloaded and played locally.
 
 ## Optional upgrade to a native inline player
 
