@@ -203,7 +203,12 @@ namespace Intonaco.Core
                 SpeedRatio = _playbackSpeed,
                 Volume = _volume,
                 IsMuted = true, // Wallpapers should be silent by default
-                IsHitTestVisible = false
+                IsHitTestVisible = false,
+                // The element box itself must span the whole desktop host;
+                // Stretch then decides how the video fills that box.
+                Margin = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
             };
 
             _mediaElement.MediaOpened += OnMediaOpened;
@@ -223,11 +228,15 @@ namespace Intonaco.Core
 
             _pausedImage = new Image
             {
-                // The capture is already rendered at the desktop host's
-                // layout size with StretchMode applied by MediaElement.
-                Stretch = Stretch.Fill,
+                // Cover, never letterbox. The stored frame is cropped to the
+                // desktop host's aspect ratio at capture time, so covering it
+                // reproduces the live wallpaper pixel-for-pixel — while
+                // Stretch.Uniform (or any capture with a mismatched aspect)
+                // would put black bars down the sides of a paused wallpaper.
+                Stretch = Stretch.UniformToFill,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch,
+                Margin = new Thickness(0),
                 Visibility = Visibility.Collapsed,
                 IsHitTestVisible = false
             };
@@ -238,7 +247,13 @@ namespace Intonaco.Core
             {
                 Background = Brushes.Black,
                 ClipToBounds = true,
-                IsHitTestVisible = false
+                IsHitTestVisible = false,
+                // Explicit full-bleed: the host must occupy every pixel of the
+                // desktop layer so neither the live video nor the frozen frame
+                // can be inset and reveal black at the edges.
+                Margin = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
             };
             _host.Children.Add(mediaElement);
             _host.Children.Add(_pausedImage);
@@ -549,7 +564,71 @@ namespace Intonaco.Core
             return Math.Min(1.0, scale);
         }
 
-        internal static BitmapSource? CaptureFrame(MediaElement mediaElement)
+        /// <summary>
+        /// Centre-crops <paramref name="source"/> so its aspect ratio matches
+        /// <paramref name="targetAspect"/> (width / height). A paused frame
+        /// whose aspect disagrees with the desktop is what produced black bars
+        /// down the sides: the letterbox was baked into the captured pixels and
+        /// then stretched to full screen. Cropping makes that structurally
+        /// impossible — the stored frame always has the desktop's shape.
+        /// Returns the source unchanged when it already matches.
+        /// </summary>
+        internal static BitmapSource CentreCropToAspect(
+            BitmapSource source, double targetAspect, double tolerance = 0.01)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+
+            if (double.IsNaN(targetAspect) || targetAspect <= 0 ||
+                source.PixelWidth < 1 || source.PixelHeight < 1)
+            {
+                return source;
+            }
+
+            double current = (double)source.PixelWidth / source.PixelHeight;
+            if (Math.Abs(current - targetAspect) <= targetAspect * tolerance)
+                return source;
+
+            int cropWidth;
+            int cropHeight;
+
+            if (current > targetAspect)
+            {
+                // Wider than the desktop: trim the sides.
+                cropHeight = source.PixelHeight;
+                cropWidth = (int)Math.Round(source.PixelHeight * targetAspect);
+            }
+            else
+            {
+                // Taller than the desktop: trim the top and bottom.
+                cropWidth = source.PixelWidth;
+                cropHeight = (int)Math.Round(source.PixelWidth / targetAspect);
+            }
+
+            cropWidth = Math.Clamp(cropWidth, 1, source.PixelWidth);
+            cropHeight = Math.Clamp(cropHeight, 1, source.PixelHeight);
+
+            var cropped = new CroppedBitmap(
+                source,
+                new Int32Rect(
+                    (source.PixelWidth - cropWidth) / 2,
+                    (source.PixelHeight - cropHeight) / 2,
+                    cropWidth,
+                    cropHeight));
+
+            if (cropped.CanFreeze)
+                cropped.Freeze();
+
+            return cropped;
+        }
+
+        /// <summary>
+        /// Captures the frame currently presented by <paramref name="mediaElement"/>.
+        /// When <paramref name="targetAspect"/> is supplied the result is cropped
+        /// to it, so the returned bitmap always matches the desktop's shape.
+        /// </summary>
+        internal static BitmapSource? CaptureFrame(
+            MediaElement mediaElement, double targetAspect = double.NaN)
         {
             try
             {
@@ -578,6 +657,11 @@ namespace Intonaco.Core
                     result = new WriteableBitmap(transformed);
                 }
 
+                // Uniform scaling preserves the aspect ratio, so crop after
+                // the downscale and the stored frame stays inside the memory
+                // budget while matching the desktop exactly.
+                result = CentreCropToAspect(result, targetAspect);
+
                 if (result.CanFreeze)
                     result.Freeze();
 
@@ -589,6 +673,24 @@ namespace Intonaco.Core
             }
         }
 
+        /// <summary>
+        /// The desktop host's aspect ratio, or NaN when it has not been laid
+        /// out yet. The host — not the media element — is the authoritative
+        /// desktop box, so it is what the paused frame must match.
+        /// </summary>
+        private double HostAspectRatio()
+        {
+            if (_host == null)
+                return double.NaN;
+
+            double width = _host.ActualWidth;
+            double height = _host.ActualHeight;
+            if (width < 2 || height < 2)
+                return double.NaN;
+
+            return width / height;
+        }
+
         private BitmapSource? CaptureCurrentFrame()
         {
             if (_mediaElement == null || !_isMediaOpened ||
@@ -597,7 +699,57 @@ namespace Intonaco.Core
                 return null;
             }
 
-            return CaptureFrame(_mediaElement);
+            // Converge layout first. Suspending from a focus change, a
+            // fullscreen transition or a display resize can otherwise capture
+            // the media element at a stale size, and the mismatch is what shows
+            // up as black bars on the frozen frame.
+            _host?.UpdateLayout();
+            _mediaElement.UpdateLayout();
+
+            double hostAspect = HostAspectRatio();
+
+            // The frozen frame must cover the desktop whenever the user asked
+            // for cover. Photographing the MediaElement as-is bakes whatever
+            // letterbox it is showing into the bitmap's pixels, and no container
+            // geometry can remove bars that are part of the image — so force
+            // cover for the duration of the capture, then restore the user's fit
+            // for live playback.
+            //
+            // "Fit frame" (Stretch.Uniform) is the one mode where the letterbox
+            // is deliberate: forcing cover there would make the paused wallpaper
+            // zoom and crop relative to the playing one, so it is preserved and
+            // stays consistent across the pause.
+            Stretch captureStretch = _mediaElement.Stretch;
+            bool preserveLetterbox = captureStretch == Stretch.Uniform;
+            BitmapSource? frame;
+            try
+            {
+                if (!preserveLetterbox)
+                    _mediaElement.Stretch = Stretch.UniformToFill;
+
+                _mediaElement.UpdateLayout();
+                frame = CaptureFrame(_mediaElement, hostAspect);
+            }
+            finally
+            {
+                _mediaElement.Stretch = captureStretch;
+            }
+
+            DebugLog.Write(
+                frame == null
+                    ? $"Paused frame capture returned nothing (host " +
+                      $"{_host?.ActualWidth:0}x{_host?.ActualHeight:0}, media " +
+                      $"{_mediaElement.ActualWidth:0}x{_mediaElement.ActualHeight:0}, " +
+                      $"video {NaturalVideoWidth}x{NaturalVideoHeight}, fit {captureStretch})."
+                    : $"Paused frame captured {frame.PixelWidth}x{frame.PixelHeight} " +
+                      $"(host {_host?.ActualWidth:0}x{_host?.ActualHeight:0}, media " +
+                      $"{_mediaElement.ActualWidth:0}x{_mediaElement.ActualHeight:0}, " +
+                      $"video {NaturalVideoWidth}x{NaturalVideoHeight}, fit {captureStretch}, " +
+                      $"captured-as {(preserveLetterbox ? "fit-frame" : "cover")}, " +
+                      $"host aspect " +
+                      $"{(double.IsNaN(hostAspect) ? "unknown" : hostAspect.ToString("0.###"))}).");
+
+            return frame;
         }
 
         private void OnMediaOpened(object? sender, RoutedEventArgs e)
@@ -823,13 +975,38 @@ namespace Intonaco.Core
 
         private void SetPausedFrame(BitmapSource frame)
         {
-            _pausedFrame = frame;
+            // Final gate. Every path that shows a frozen frame — Pause,
+            // PauseAt during explorer-restart recovery (which carries a frame
+            // captured against the *previous* desktop host), and
+            // RefreshPausedFrame — funnels through here, so cropping to the
+            // current desktop aspect at this point makes black bars impossible
+            // no matter which path produced the bitmap.
+            double hostAspect = HostAspectRatio();
+            BitmapSource shown = CentreCropToAspect(frame, hostAspect);
+
+            if (!ReferenceEquals(shown, frame))
+            {
+                DebugLog.Write(
+                    $"Paused frame re-cropped {frame.PixelWidth}x{frame.PixelHeight} -> " +
+                    $"{shown.PixelWidth}x{shown.PixelHeight} to match host aspect " +
+                    $"{hostAspect:0.###}.");
+            }
+
+            _pausedFrame = shown;
             if (_pausedImage != null)
             {
-                _pausedImage.Source = frame;
+                // Re-assert full-bleed cover every time a frame is shown. The
+                // frame is cropped to the desktop aspect, so covering it cannot
+                // letterbox; anything else here is what put bars down the sides
+                // of a paused wallpaper.
+                _pausedImage.Stretch = Stretch.UniformToFill;
+                _pausedImage.Margin = new Thickness(0);
+                _pausedImage.HorizontalAlignment = HorizontalAlignment.Stretch;
+                _pausedImage.VerticalAlignment = VerticalAlignment.Stretch;
+                _pausedImage.Source = shown;
                 _pausedImage.Visibility = Visibility.Visible;
             }
-            PausedFrameChanged?.Invoke(frame);
+            PausedFrameChanged?.Invoke(shown);
         }
 
         private void ClearPausedFrame()
