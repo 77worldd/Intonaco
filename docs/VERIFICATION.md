@@ -89,15 +89,55 @@ are never silently skipped. If you run any of them, please report results
       reattaches automatically (`TaskbarCreated` handling)
 - [ ] Resolution change / monitor disconnect re-fits the wallpaper
 
+### v2.0.0 functional checklist (plan Section 4)
+
+- [ ] Wallpaper fills the monitor completely with **no black bars** while
+      playing *and* while paused (check a 21:9 source on a 16:9 display and
+      a portrait source on a landscape display)
+- [ ] Pausing replaces the video with the captured frame and unloads the
+      decoder: Task Manager CPU / GPU Video Decode fall to ~0% within a few
+      seconds, `debug.log` shows `Wallpaper suspended at …; static frame WxH`
+      and `Performance[paused-after-collection]`
+- [ ] Setting the frame rate to **30 fps** lowers GPU/CPU utilisation versus
+      **60 fps** for the same clip; `debug.log` shows
+      `Frame-rate gate engaged: target 30 fps (interval 33.3 ms)` and a
+      `measured presentation` value close to the target
+- [ ] Switching focus to Discord, a browser or a game auto-pauses the
+      wallpaper within ~1.5 s (`Auto-pause: foreground is 'chrome' …`)
+- [ ] Returning focus to the desktop / Explorer auto-resumes it
+      (`Auto-resume: foreground returned to desktop …`)
+- [ ] Shell overlays (Start menu, Search, Action Center, lock screen) do
+      **not** cause a pause/resume flicker
+- [ ] "Start with Windows" creates
+      `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Intonaco` with
+      `"<path>\Intonaco.exe" --minimized`; disabling the toggle deletes it
+- [ ] Launching with `--minimized` (or `-m`) starts silently in the system
+      tray with no window flash and the wallpaper already playing
+- [ ] Tray context menu works: Show Intonaco, Play/Pause, Choose video…,
+      Mute, Settings, Exit
+- [ ] Last wallpaper path, volume, fit, frame rate, speed and loop setting
+      all restore automatically after a reboot
+- [ ] An invalid/unsupported video shows a friendly toast
+      ("Unable to play video: Unsupported codec or format…") and the app
+      keeps running; a `.flv`/`.rmvb` file is rejected before the decoder
+      is even created
+- [ ] Windows 11 Fluent dark theme is applied (no neon/glow): window
+      `#1E1E1E`, cards `#272727`, subtle white-alpha borders, `#60CDFF`
+      accent only on the primary button, active switches and slider fill
+
 ### Fullscreen detection
 
 - [ ] Launching a fullscreen game pauses the wallpaper within ~2 s
 - [ ] Exiting the game resumes it
-- [ ] A merely *maximized* browser window does **not** pause playback
+- [ ] A merely *maximized* browser window does **not** pause playback when
+      only the legacy fullscreen behaviour is wanted — note that with
+      "Pause when other apps are focused" enabled (the v2 default) a
+      maximized browser *does* pause, which is the intended Lively-like
+      behaviour; turn the toggle off to restore v1 behaviour
 
-### v1.3.0 installer
+### v2.0.0 installer
 
-- [ ] Run `Intonaco-v1.3.0-win-x64-setup.exe` as a standard user: setup
+- [ ] Run `Intonaco-v2.0.0-win-x64-setup.exe` as a standard user: setup
       completes without an administrator prompt, creates the Start Menu
       shortcut, respects the optional desktop-shortcut choice, and the
       post-install launch option opens the current interface
@@ -120,11 +160,13 @@ H.264 playback in each state. The helper script samples process RAM/CPU
 for repeatable comparisons:
 
 ```powershell
-.\tools\Measure-IntonacoPerformance.ps1 -Label "v1.3 playing main window" -DurationSeconds 20
+.\tools\Measure-IntonacoPerformance.ps1 -Label "v2.0 playing main window" -DurationSeconds 20
 # Minimize Intonaco to the tray, wait 10 seconds, sample again.
-.\tools\Measure-IntonacoPerformance.ps1 -Label "v1.3 playing tray" -DurationSeconds 20
+.\tools\Measure-IntonacoPerformance.ps1 -Label "v2.0 playing tray" -DurationSeconds 20
 # Pause from the tray, wait 10 seconds, sample again.
-.\tools\Measure-IntonacoPerformance.ps1 -Label "v1.3 paused" -DurationSeconds 20
+.\tools\Measure-IntonacoPerformance.ps1 -Label "v2.0 paused" -DurationSeconds 20
+# Focus another app (browser/game) with auto-pause on, wait 10 seconds, sample.
+.\tools\Measure-IntonacoPerformance.ps1 -Label "v2.0 auto-paused (other app focused)" -DurationSeconds 20
 ```
 
 - [ ] Record average/max private memory and working set for playing
@@ -151,10 +193,16 @@ for repeatable comparisons:
 
 ## Known limitations
 
-- WPF `MediaElement` renders at the video's native frame rate. The FPS
-  preference is persisted, but a hard per-frame cap is not enforced on the
-  `MediaElement` path; true throttling would need a Media Foundation
-  pipeline with manual presentation. Tracked as future work.
+- **Frame-rate cap applies to presentation, not to decoding.** v2.0.0 writes
+  `Timeline.DesiredFrameRate` onto the wallpaper `MediaElement` (30 fps →
+  ~33.3 ms interval, 60 fps → cleared/uncapped) and runs a
+  `CompositionTarget.Rendering` gate that measures and logs the achieved
+  presentation rate (`Frame-rate gate: target 30 fps, measured presentation …`
+  in `debug.log`). That measurably reduces composition/GPU work versus an
+  uncapped 60 fps session, but the hardware decoder still decodes the
+  container at its native rate. A hard per-frame *decode* cap would require a
+  custom Media Foundation pipeline with manual presentation. Use the
+  auto-pause and Pause features for the large resource wins.
 - A suspended Pause reopens the file and seeks on Resume. Seek
   precision and reopen latency therefore depend on the container/codec
   and its keyframe/index layout; the static frame remains visible until
@@ -162,7 +210,14 @@ for repeatable comparisons:
   Intonaco deliberately falls back to a native paused `MediaElement`
   rather than replacing the wallpaper with black.
 - Format support is bounded by installed Windows codecs (HEVC needs the
-  HEVC Video Extensions).
+  HEVC Video Extensions). Containers with no Media Foundation demuxer at all
+  (`.flv`, `.rmvb`, `.vob`, `.ogv`, …) are rejected up front by
+  `MediaFormatProbe` with an actionable message instead of a black desktop.
+- Foreground auto-pause polls `GetForegroundWindow()` every 1.2 s, so a
+  focus change can take up to ~1.2 s to suspend playback (and the same to
+  resume). Borderless/fullscreen-exclusive games that do not take the
+  foreground window may not be detected; the legacy fullscreen-coverage
+  detector runs alongside it to cover that case.
 - The WorkerW technique relies on the undocumented `0x052C` Progman message.
   It has been stable since Windows 7, but Microsoft could change it in a
   future release.

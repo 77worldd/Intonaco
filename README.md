@@ -23,12 +23,14 @@ _Preview graphic rendered from the app's UI layout. Live screenshots are welcome
 - **Drag, drop and reuse** — Drop a video anywhere on the window, then bring favorites back from the recent-wallpaper list
 - **Personalized playback** — Fill/Fit/Stretch modes, 0.5×–1.5× speed, looping, volume and frame-rate controls
 - **Minimal footprint** — Single process, no background services; pausing closes both video decoders and leaves one static frame, and the preview decoder stops whenever the main window is hidden
+- **Focus-aware auto-pause** — Detects the Win32 foreground window every 1.2 s and suspends the wallpaper (snapshot + decoder unload) while you are in Discord, a browser, a game or any other app; resumes the moment the desktop is visible again
 - **Windows installer** — Optional per-user setup with Start Menu shortcut, optional desktop shortcut and clean uninstall; settings survive upgrades
-- **Fullscreen-aware** — Automatically pauses when games or fullscreen apps are running
+- **Fullscreen-aware** — Additionally pauses when a borderless/fullscreen-exclusive app covers the monitor
 - **Power-aware** — Pauses on sleep, lock, and display-off events
 - **Explorer crash recovery** — Automatically reattaches after Explorer restarts
-- **System tray** — Runs quietly in the background with tray controls
-- **Clean Windows 11 UI** — Settings-style layout, native-sized controls and typography, restrained light/dark surfaces, and a title bar that follows the app theme
+- **Silent boot** — Start with Windows writes the `HKCU\...\Run` value with `--minimized`, and Intonaco then starts straight into the tray with the last wallpaper already playing
+- **System tray** — Runs quietly in the background with tray controls (Play/Pause, Choose video, Mute, Settings, Exit)
+- **Clean Windows 11 UI** — Settings-style layout, Fluent dark/light surfaces (`#1E1E1E` window, `#272727` cards, `#60CDFF` accent used sparingly), native-sized controls and Segoe UI Variable typography
 - **Light/Dark/System theme** — Follows the Windows app theme by default, or pick Light/Dark in Settings
 
 ## Supported Formats
