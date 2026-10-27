@@ -14,8 +14,13 @@ are never silently skipped. If you run any of them, please report results
 - [x] `dotnet test -c Release` — settings normalization/recents, player
       playback options, fullscreen-detector and frame-rate-limiter tests pass
 - [x] Hosted media-lifecycle test: a generated video opens, Pause
-      captures a frame and reports no active media pipeline, Resume
-      reopens it, and Stop clears both source and paused frame
+      keeps the source open and the media element visible, Resume does
+      not reopen or seek, and Stop releases the source
+- [x] Source-level regression tests pin that Pause never captures,
+      closes, collapses or replaces the rendering surface; the preview
+      is paused in place rather than photographed
+- [x] Unit tests for both background animation modes, JSON persistence
+      across restarts, and manual pause overriding focus events
 - [x] Framework-dependent, self-contained single-file and installer
       ReadyToRun publishes succeed
 - [x] Inno Setup builds, then silently installs to a test folder,
@@ -44,17 +49,23 @@ are never silently skipped. If you run any of them, please report results
 - [ ] 1080p and 4K H.264 files loop seamlessly with no black flash
 - [ ] HEVC file plays when the HEVC Video Extension is installed
 - [ ] Play/Pause/Stop/Mute/volume from the main window and from the tray menu
-- [ ] Pause leaves the current real video frame (not black) as a static
-      desktop image; `debug.log` says `Wallpaper suspended` with the
-      captured frame dimensions, and Resume continues near the paused
-      position without a black/first-frame flash
+- [ ] Clicking the manual Pause control on the left stops animation
+      immediately with **no black borders, black blocks, empty gaps or
+      flicker**; the last frame stays byte-for-byte on the same surface,
+      with identical size, position and fit. `debug.log` says
+      `Wallpaper paused in place … media surface kept`
+- [ ] Resume continues from that exact frame with no reopen, seek,
+      black flash or first-frame jump (repeat 20 times)
+- [ ] Losing focus / switching to another app does not produce black
+      borders in either animation mode, and returning resumes (Mode A)
+      or keeps animating (Mode B) without resetting the background
 - [ ] Repeat Pause → Resume at least 20 times and switch wallpapers
       several times: no crash, stuck black frame, steadily growing
       private memory or handle count
-- [ ] Change Fill/Fit/Stretch while paused: the static frame updates
-      behind the old image without becoming a live video again
+- [ ] Change Fill/Fit/Stretch while paused: the frozen frame re-fits
+      on the live surface without starting the animation or black bars
 - [ ] Preview in the main window stays muted and stops on Stop; while
-      paused it shows a static frame rather than continuing to animate
+      paused it freezes in place without a bitmap swap or black bands
 - [ ] Dropping a supported video onto the window applies it; dropping a
       non-video shows a friendly error
 - [ ] Applying a video adds it to Recent wallpapers, and a recent item reapplies
@@ -94,10 +105,10 @@ are never silently skipped. If you run any of them, please report results
 - [ ] Wallpaper fills the monitor completely with **no black bars** while
       playing *and* while paused (check a 21:9 source on a 16:9 display and
       a portrait source on a landscape display)
-- [ ] Pausing replaces the video with the captured frame and unloads the
-      decoder: Task Manager CPU / GPU Video Decode fall to ~0% within a few
-      seconds, `debug.log` shows `Wallpaper suspended at …; static frame WxH`
-      and `Performance[paused-after-collection]`
+- [ ] Pausing does **not** replace the video: the same `MediaElement`
+      keeps presenting the last frame and no second layer appears. CPU /
+      GPU Video Decode fall to idle because the media clock is stopped;
+      `debug.log` shows `Wallpaper paused in place … media surface kept`
 - [ ] Setting the frame rate to **30 fps** lowers GPU/CPU utilisation versus
       **60 fps** for the same clip; `debug.log` shows
       `Frame-rate gate engaged: target 30 fps (interval 33.3 ms)` and a
@@ -124,6 +135,25 @@ are never silently skipped. If you run any of them, please report results
 - [ ] Windows 11 Fluent dark theme is applied (no neon/glow): window
       `#1E1E1E`, cards `#272727`, subtle white-alpha borders, `#60CDFF`
       accent only on the primary button, active switches and slider fill
+
+### v2.0.2 manual pause, focus modes and restart persistence
+
+- [ ] With **Pause when app loses focus** (default), switch to a browser or
+      game: animation updates stop within ~1.5 s and the background stays
+      fully rendered; returning to the desktop/Explorer resumes smoothly
+- [ ] With **Keep animating when unfocused**, the wallpaper keeps animating
+      while another app is used; returning to Intonaco does not reset or
+      re-seek it
+- [ ] Changing between the two modes while played, manually paused and
+      focus-paused in turn: the manual pause is never resumed by a mode
+      change or by a focus event
+- [ ] Manual Pause/Resume works identically in both modes, including from
+      the tray menu
+- [ ] Quit and relaunch Intonaco (and reboot at least once): the chosen
+      mode is still selected in **Background animation when unfocused**
+- [ ] A 21:9 clip on a 16:9 desktop and a portrait clip on a landscape
+      desktop show no black bars while playing, manually paused, resumed,
+      focus-paused and unfocused-animating
 
 ### Fullscreen detection
 
@@ -203,12 +233,12 @@ for repeatable comparisons:
   container at its native rate. A hard per-frame *decode* cap would require a
   custom Media Foundation pipeline with manual presentation. Use the
   auto-pause and Pause features for the large resource wins.
-- A suspended Pause reopens the file and seeks on Resume. Seek
-  precision and reopen latency therefore depend on the container/codec
-  and its keyframe/index layout; the static frame remains visible until
-  Media Foundation presents new frames. If frame capture ever fails,
-  Intonaco deliberately falls back to a native paused `MediaElement`
-  rather than replacing the wallpaper with black.
+- Pause keeps the Media Foundation source open so the last decoded frame
+  stays on the native video surface. Decoder buffers therefore remain
+  allocated while paused, although the media clock is stopped and no new
+  frames are decoded or presented. This is deliberate: closing the source
+  or swapping it for a WPF bitmap is what produced the black borders.
+  Stop fully releases the source.
 - Format support is bounded by installed Windows codecs (HEVC needs the
   HEVC Video Extensions). Containers with no Media Foundation demuxer at all
   (`.flv`, `.rmvb`, `.vob`, `.ogv`, …) are rejected up front by

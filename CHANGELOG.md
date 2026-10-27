@@ -4,6 +4,86 @@ All notable changes to Intonaco are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] — 2026-10-27
+
+Critical rendering fix plus a dedicated background-animation setting.
+
+### Fixed
+
+- **Black borders/blocks on manual Pause — root cause removed.** Manual
+  pause and focus auto-pause both called `WallpaperPlayer.Pause()`, which
+  since v1.3.0 did much more than stop animation updates: it photographed
+  the `MediaElement` with `RenderTargetBitmap`, then called `Stop()`,
+  `Source = null`, `Close()` and `Visibility = Collapsed`, replacing the
+  live video with a separate `Image`. WPF MediaElement video is presented
+  by Media Foundation into a native surface that is **not** part of the
+  managed visual tree, so that snapshot was not a faithful copy of the
+  desktop (black bands/blocks were baked into it), and closing the source
+  removed the only surface holding the real frame. The 2.0.0/2.0.1
+  container-geometry and aspect-crop fixes could not fix pixels that were
+  captured wrong in the first place. Focus loss appeared fine only because
+  the desktop is covered by the other application and auto-resume happens
+  before it is visible again — **focus loss was never the cause**.
+- Pause now stops *only the media clock*: source, decoded frame, element
+  geometry, Stretch, size and position are untouched. The last rendered
+  frame remains visible on the same surface, so there is nothing to
+  letterbox, clear or repaint. This restores the v1.0.0 pause behaviour
+  while keeping every later feature (FPS cap, preview, auto-pause, fit,
+  speed, loop, tray, recovery).
+- Resume is a single `Play()` on that same paused clock: no reopen, no
+  seek, no decoder warm-up, no frame swap — no flicker, black gaps or
+  jump to a different state.
+- The in-app preview is paused in place too, instead of being photographed
+  into a bitmap and closed. Its decoder is still released when the window
+  is hidden/minimized/stopped, and `MediaOpened`/`MediaEnded` are now
+  wired so a reopened preview syncs to the desktop's position.
+- Explorer-restart recovery restores a paused wallpaper by seeking the
+  live surface at the saved position (`PauseAt`), not by carrying a bitmap
+  captured against a destroyed player window.
+- `WallpaperPlayer.Position` reports the captured paused position while
+  paused, so recovery cannot jump to a different frame.
+
+### Added
+
+- **Background animation when unfocused** — a dedicated, clearly labelled
+  two-mode setting in the Wallpaper settings card, persisted in
+  `%LocalAppData%\Intonaco\settings.json`:
+  - **Pause when app loses focus (Mode A, default)** — focus/fullscreen
+    detection stops animation updates while another application is
+    focused and resumes them when the desktop/Explorer returns. The
+    background stays fully rendered throughout.
+  - **Keep animating when unfocused (Mode B)** — both auto-pause detectors
+    are disabled so the wallpaper keeps animating while the user works in
+    another application; returning does not reset or re-seek it.
+- Manual pause is now tracked separately (`_pausedByUser` and the new
+  `PlaybackFocusPolicy`). Focus events, system events and mode changes can
+  never auto-resume a wallpaper the user paused explicitly, in either
+  mode; the manual control always works.
+- `BackgroundAnimationMode` is the single source of truth with migration
+  from v1 (`pauseOnFullscreen`) and v2.0.x (`pauseWhenUnfocused`) files;
+  the legacy flags are kept in sync for older builds. Invalid/hand-edited
+  values fall back to the safe default.
+
+### Changed
+
+- Pause no longer closes the desktop decoder (it stops the clock, so no
+  frames are decoded or presented); `Stop()` remains the full teardown.
+  README, verification checklist and performance notes now describe the
+  real architecture instead of the static-frame suspension.
+
+### Tests
+
+- `PauseRenderingTests` pins the root cause at source level (Pause must
+  not capture, close, collapse or replace the surface; Resume must not
+  reopen; the preview must pause in place) and asserts the host remains
+  full-bleed with no visible secondary layer.
+- Hosted media-lifecycle test now proves Pause keeps the same `Uri`/
+  visible element, stops the clock and that Resume does not raise
+  `MediaOpened` again.
+- `BackgroundAnimationModeTests` covers the default mode, Mode B, JSON
+  restart persistence, migration, invalid values and manual-pause
+  independence in both modes.
+
 ## [2.0.1] — 2026-10-27
 
 Hotfix: the paused-wallpaper black bars that 2.0.0 claimed to fix were still

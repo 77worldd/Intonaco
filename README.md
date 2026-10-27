@@ -22,8 +22,9 @@ _Preview graphic rendered from the app's UI layout. Live screenshots are welcome
 - **Hardware-accelerated playback** — Uses Windows Media Foundation with DXVA2 hardware decoding
 - **Drag, drop and reuse** — Drop a video anywhere on the window, then bring favorites back from the recent-wallpaper list
 - **Personalized playback** — Fill/Fit/Stretch modes, 0.5×–1.5× speed, looping, volume and frame-rate controls
-- **Minimal footprint** — Single process, no background services; pausing closes both video decoders and leaves one static frame, and the preview decoder stops whenever the main window is hidden
-- **Focus-aware auto-pause** — Detects the Win32 foreground window every 1.2 s and suspends the wallpaper (snapshot + decoder unload) while you are in Discord, a browser, a game or any other app; resumes the moment the desktop is visible again
+- **Minimal footprint** — Single process, no background services; pausing stops the media clock with no new frames decoded or presented, and the preview decoder is closed whenever the main window is hidden
+- **Pause without artefacts** — Pause keeps the last decoded frame on the very same MediaElement surface: no snapshot, no source close, no reopen, no black borders or blocks
+- **Two background animation modes** — Choose *Pause when app loses focus* (default) or *Keep animating when unfocused*; the choice is saved and restored on restart, and never overrides a manual pause
 - **Windows installer** — Optional per-user setup with Start Menu shortcut, optional desktop shortcut and clean uninstall; settings survive upgrades
 - **Fullscreen-aware** — Additionally pauses when a borderless/fullscreen-exclusive app covers the monitor
 - **Power-aware** — Pauses on sleep, lock, and display-off events
@@ -126,7 +127,7 @@ Videos you apply are kept under **Recent wallpapers** for one-click reuse.
 | Choose Video      | Select a video file as wallpaper              |
 | Drag & drop       | Drop a supported video anywhere on the window |
 | Recent wallpapers | Reapply one of your last six wallpapers       |
-| ▶ / ❚❚            | Play, or pause to a static frame and release the decoder |
+| ▶ / ❚❚            | Play, or pause the animation in place — the last frame stays visible, unchanged |
 | ■                 | Stop wallpaper and restore default desktop    |
 | Mute / volume     | Toggle or precisely adjust wallpaper audio    |
 | Open location     | Show the current video in File Explorer       |
@@ -139,7 +140,7 @@ Videos you apply are kept under **Recent wallpapers** for one-click reuse.
 | Playback speed      | 1.0×    | Slow dramatic loops to 0.5× or speed them up to 1.5×   |
 | Frame rate          | 30 fps  | Preferred playback frame rate (throttled — 30 fps saves GPU vs 60 fps) |
 | Loop playback       | On      | Restart the video when it reaches the end               |
-| Pause when other apps are focused | On | Pause wallpaper while you're using other apps to save resources (auto-resumes on desktop) |
+| Background animation when unfocused | Pause when app loses focus | Two modes: pause animation updates on focus loss (default), or keep animating while another app is focused. Saved across restarts; a manual pause always wins. |
 | Start with Windows  | Off     | Launch Intonaco at login (registry Run key with --minimized) |
 | Start minimized     | Off     | Open Intonaco in the system tray on launch              |
 | Resume last wallpaper | On    | Restore the previous wallpaper automatically on launch  |
@@ -159,17 +160,20 @@ guarantees are architectural:
 | --- | --- |
 | Playing, settings window visible | Desktop decoder plus the separate live-preview decoder |
 | Playing, app hidden in tray | **Desktop decoder only** — the preview source is closed |
-| Paused | **No decoder** — one captured static frame; both desktop and preview pipelines are closed |
-| Fullscreen/system pause | Same suspended static-frame state as Pause |
-| Stopped/tray idle | No media source, paused frame or playback timers |
+| Paused | **Clock stopped** — the source and the last decoded frame stay on the same rendering surface; no new frames are decoded or presented |
+| Focus/fullscreen/system pause | Same paused state: animation updates stop, rendering continues unchanged |
+| Stopped/tray idle | No media source and no playback timers |
 
-Earlier versions only called `MediaElement.Pause()`, which retained the
-Media Foundation source/decoder and frame queues, and the preview had
-its own pipeline that was not synchronized with Pause or window
-visibility. v2.0.0 closes those pipelines on pause and adds foreground-aware
-auto-pause plus FPS throttling (`Timeline.DesiredFrameRate`). CPU/GPU video-decode
-activity should therefore fall to idle noise while paused or when other
-apps are focused, apart from the one static image already held by the desktop compositor.
+v2.0.0/2.0.1 tried to make Pause cheaper by photographing the `MediaElement`
+into a bitmap, closing the Media Foundation source and showing that bitmap
+instead. WPF MediaElement video lives on a native Media Foundation surface,
+not in WPF's managed visual tree, so the snapshot was not a faithful copy of
+the desktop — it baked black borders/blocks into the paused background, and
+closing the source removed the only surface holding the real frame. v2.0.2
+restores the v1 behaviour: Pause stops the media clock and keeps the exact
+same rendering surface, geometry and last frame. FPS throttling
+(`Timeline.DesiredFrameRate`), focus auto-pause and closing the *preview*
+decoder while the window is hidden are all retained.
 
 For a repeatable before/after sample on your own machine, play the same
 video and run the following once while playing, again after pausing for
@@ -192,11 +196,11 @@ pressure reclaims them. On-device checks are tracked in
 ```text
 Intonaco.exe (single process)
 ├── WPF UI (MainWindow)
-│   └── Preview MediaElement → only while visible and playing; paused
-│       state reuses the desktop player's one static frame
+│   └── Preview MediaElement → only while visible; paused in place when
+│       the wallpaper pauses, closed when the window is hidden
 ├── PlayerWindow → classic WorkerW, or layered Progman child on raised desktops
-│   ├── MediaElement → Windows Media Foundation → DXVA2
-│   └── Paused-frame Image → shown after the media source is closed
+│   └── MediaElement → Windows Media Foundation → DXVA2 (single, always-live
+│       rendering surface; Pause stops only its media clock)
 ├── DesktopIntegration → layout detection, 0x052C split, verified placement
 ├── FullscreenDetector → 2-second polling only while playing or waiting
 │   to resume from a fullscreen pause
@@ -219,8 +223,8 @@ Intonaco.exe (single process)
 
 - Minimize Intonaco to the tray while playing; that closes the second
   preview decoder and leaves only desktop playback running
-- Pause when you do not need motion; Pause now closes the desktop decoder
-  and keeps only a static frame
+- Pause when you do not need motion; Pause stops all animation updates
+  while the last frame stays on screen (no capture, close or reopen)
 - Use a lower-resolution video
 - Ensure hardware acceleration is working (use the H.264 codec)
 
