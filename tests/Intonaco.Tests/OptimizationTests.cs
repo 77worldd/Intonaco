@@ -156,8 +156,8 @@ namespace Intonaco.Tests
                 Assert.True(player.HasActiveMediaPipeline);
                 Assert.Same(openSource, media.Source);
                 Assert.Equal(Visibility.Visible, media.Visibility);
-                Assert.Equal(0, reopenCount,
-                    "Resume must not reopen the media source or seek.");
+                // Resume must not reopen the media source or seek.
+                Assert.Equal(0, reopenCount);
 
                 player.Stop();
                 Assert.Equal(WallpaperPlayer.PlaybackState.Stopped, player.CurrentState);
