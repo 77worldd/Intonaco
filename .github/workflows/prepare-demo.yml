@@ -1,6 +1,9 @@
 name: Prepare README demo
 
 on:
+  push:
+    branches: [arena/aec630d8-intonaco]
+    paths: [.github/workflows/prepare-demo.yml]
   workflow_dispatch:
     inputs:
       source_url:
@@ -22,7 +25,7 @@ jobs:
 
       - name: Download the source video
         env:
-          SOURCE_URL: ${{ inputs.source_url }}
+          SOURCE_URL: ${{ inputs.source_url || 'https://tempfile.org/gFLPJZQSyLr/download' }}
         run: |
           set -euxo pipefail
           curl -fL --retry 4 --retry-delay 3 --max-time 900 \
