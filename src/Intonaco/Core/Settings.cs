@@ -19,7 +19,18 @@ namespace Intonaco.Core
         public string WallpaperFit { get; set; } = "Fill"; // "Fill", "Fit", "Stretch"
         public double PlaybackSpeed { get; set; } = 1.0;
         public bool LoopPlayback { get; set; } = true;
+
+        /// <summary>Legacy fullscreen-only detection; migrated to PauseWhenUnfocused.</summary>
         public bool PauseOnFullscreen { get; set; } = true;
+
+        /// <summary>
+        /// When true, the wallpaper auto-pauses whenever any non-desktop window is
+        /// in the foreground (Discord, browsers, games, etc.) and resumes when the
+        /// desktop is visible again. This matches Lively Wallpaper behaviour and
+        /// saves significant CPU/GPU. Enabled by default.
+        /// </summary>
+        public bool PauseWhenUnfocused { get; set; } = true;
+
         public bool StartWithWindows { get; set; } = false;
         public bool StartMinimized { get; set; } = false;
         public string Theme { get; set; } = "System"; // "Light", "Dark", "System"
@@ -32,6 +43,12 @@ namespace Intonaco.Core
 
         [JsonIgnore]
         private static readonly string SettingsFile = Path.Combine(SettingsDir, "settings.json");
+
+        [JsonIgnore]
+        public static string SettingsDirPath => SettingsDir;
+
+        [JsonIgnore]
+        public static string SettingsFilePath => SettingsFile;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -97,21 +114,50 @@ namespace Intonaco.Core
             try
             {
                 if (File.Exists(SettingsFile))
-                {
-                    string json = File.ReadAllText(SettingsFile);
-                    var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
-                    if (settings != null)
-                    {
-                        settings.Normalize();
-                        return settings;
-                    }
-                }
+                    return LoadFromJson(File.ReadAllText(SettingsFile));
             }
             catch
             {
                 // Return defaults on any error
             }
             return new AppSettings();
+        }
+
+        /// <summary>
+        /// Deserializes persisted settings, applies the v1 → v2 migration and
+        /// normalizes the result. Kept separate from <see cref="Load"/> so the
+        /// migration can be tested without touching the real settings file.
+        /// </summary>
+        internal static AppSettings LoadFromJson(string json)
+        {
+            AppSettings? settings;
+            try
+            {
+                settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
+            }
+            catch
+            {
+                // A corrupt or hand-edited file must never stop Intonaco from
+                // starting; fall back to defaults.
+                return new AppSettings();
+            }
+
+            if (settings == null)
+                return new AppSettings();
+
+            // v1.x only had "pause for fullscreen apps". A v1 user who turned
+            // that off must not silently gain the new always-on foreground
+            // auto-pause, so honour the old opt-out unless the new field was
+            // written by v2 itself.
+            bool hasNewField =
+                json.IndexOf("\"pauseWhenUnfocused\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                json.IndexOf("\"PauseWhenUnfocused\"", StringComparison.Ordinal) >= 0;
+
+            if (!hasNewField && !settings.PauseOnFullscreen)
+                settings.PauseWhenUnfocused = false;
+
+            settings.Normalize();
+            return settings;
         }
 
         public void Save()
@@ -128,5 +174,14 @@ namespace Intonaco.Core
                 // Settings save failure is non-critical
             }
         }
+
+        /// <summary>
+        /// Whether any auto-pause behaviour is currently enabled.
+        /// Both the new foreground-aware toggle and the legacy fullscreen toggle
+        /// are respected, so users upgrading from v1 keep their preference.
+        /// Derived, therefore never persisted.
+        /// </summary>
+        [JsonIgnore]
+        public bool IsAutoPauseEnabled => PauseWhenUnfocused || PauseOnFullscreen;
     }
 }

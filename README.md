@@ -56,7 +56,7 @@ For best performance, use H.264 MP4 files at your screen resolution or lower.
 
 ### Installer (recommended)
 
-Download `Intonaco-v1.3.0-win-x64-setup.exe` from
+Download `Intonaco-v2.0.0-win-x64-setup.exe` from
 [Releases](https://github.com/77worldd/Intonaco/releases) and run it.
 The installer:
 
@@ -71,16 +71,16 @@ The installer:
 ### Portable
 
 If you prefer not to install, download the portable single file
-`Intonaco-v1.3.0-win-x64.exe` and run it directly. Zip alternatives are:
+`Intonaco-v2.0.0-win-x64.exe` and run it directly. Zip alternatives are:
 
-- `Intonaco-v1.3.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites
-- `Intonaco-v1.3.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
+- `Intonaco-v2.0.0-win-x64-self-contained.zip` — runs anywhere, no prerequisites
+- `Intonaco-v2.0.0-win-x64-framework-dependent.zip` — tiny download, requires the .NET 8 Desktop Runtime
 
 Optionally verify any download against the `SHA256SUMS.txt` published
 with the release:
 
 ```powershell
-Get-FileHash .\Intonaco-v1.3.0-win-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\Intonaco-v2.0.0-win-x64-setup.exe -Algorithm SHA256
 ```
 
 ### Build from source
@@ -135,10 +135,10 @@ Videos you apply are kept under **Recent wallpapers** for one-click reuse.
 | ------------------- | ------- | ------------------------------------------------------- |
 | Wallpaper fit       | Fill    | Fill (crop), Fit (letterbox), or Stretch to the screen  |
 | Playback speed      | 1.0×    | Slow dramatic loops to 0.5× or speed them up to 1.5×   |
-| Frame rate          | 30 fps  | Preferred playback frame rate                           |
+| Frame rate          | 30 fps  | Preferred playback frame rate (throttled — 30 fps saves GPU vs 60 fps) |
 | Loop playback       | On      | Restart the video when it reaches the end               |
-| Pause on fullscreen | On      | Pauses playback when a fullscreen app is active         |
-| Start with Windows  | Off     | Launch Intonaco at login                                |
+| Pause when other apps are focused | On | Pause wallpaper while you're using other apps to save resources (auto-resumes on desktop) |
+| Start with Windows  | Off     | Launch Intonaco at login (registry Run key with --minimized) |
 | Start minimized     | Off     | Open Intonaco in the system tray on launch              |
 | Resume last wallpaper | On    | Restore the previous wallpaper automatically on launch  |
 | Theme               | System  | System (follow Windows), Light, or Dark appearance      |
@@ -149,7 +149,7 @@ Settings are stored in `%LocalAppData%\Intonaco\settings.json`. Run Intonaco wit
 ## Performance
 
 Resource use depends strongly on the video's resolution/codec, display
-size, GPU driver and whether the settings window is visible, so v1.3.0
+size, GPU driver and whether the settings window is visible, so v2.0.0
 does not repeat the old one-number RAM estimates. The important state
 guarantees are architectural:
 
@@ -164,9 +164,10 @@ guarantees are architectural:
 Earlier versions only called `MediaElement.Pause()`, which retained the
 Media Foundation source/decoder and frame queues, and the preview had
 its own pipeline that was not synchronized with Pause or window
-visibility. v1.3.0 closes those pipelines instead. CPU/GPU video-decode
-activity should therefore fall to idle noise while paused, apart from
-the one static image already held by the desktop compositor.
+visibility. v2.0.0 closes those pipelines on pause and adds foreground-aware
+auto-pause plus FPS throttling (`Timeline.DesiredFrameRate`). CPU/GPU video-decode
+activity should therefore fall to idle noise while paused or when other
+apps are focused, apart from the one static image already held by the desktop compositor.
 
 For a repeatable before/after sample on your own machine, play the same
 video and run the following once while playing, again after pausing for
@@ -221,9 +222,9 @@ Intonaco.exe (single process)
 - Use a lower-resolution video
 - Ensure hardware acceleration is working (use the H.264 codec)
 
-> The frame-rate preference is persisted, but WPF `MediaElement` does
-> not expose a hard per-frame presentation cap; Intonaco does not claim
-> to throttle decoding on that path yet.
+> Frame-rate throttling is implemented via `Timeline.DesiredFrameRate` and a
+> `CompositionTarget.Rendering` guard; lowering from 60 fps to 30 fps reduces
+> composition GPU work measurably.
 
 ### Desktop icons missing
 

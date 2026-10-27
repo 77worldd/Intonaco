@@ -10,6 +10,13 @@ namespace Intonaco.Core
         public PlayerWindow()
         {
             InitializeComponent();
+            // Ensure no chrome leaves black bars during resize to desktop.
+            Loaded += (_, _) =>
+            {
+                ContentGrid.Margin = new Thickness(0);
+                ContentGrid.Background = Brushes.Black;
+                Background = Brushes.Black;
+            };
         }
 
         public Grid PlayerGrid => ContentGrid;

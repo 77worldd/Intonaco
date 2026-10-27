@@ -2,29 +2,29 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
-    <!-- Windows 11 / WinUI-style neutral palette - Dark theme.
-         Brand color is used sparingly: the logo supplies the deep navy,
-         while interactive accents use a softer cyan derived from it. -->
-    <Color x:Key="WindowBackgroundColor">#FF202020</Color>
-    <Color x:Key="CardBackgroundColor">#FF2B2B2B</Color>
-    <Color x:Key="CardBorderColor">#FF3A3A3A</Color>
+    <!-- Intonaco v2.0 Windows 11 Fluent Dark — clean, professional, no AI-slop.
+         Palette matches the overhaul plan: #1E1E1E mica, #272727 cards,
+         subtle rgba borders, Windows Blue #60CDFF accent used sparingly. -->
+    <Color x:Key="WindowBackgroundColor">#FF1E1E1E</Color>
+    <Color x:Key="CardBackgroundColor">#FF272727</Color>
+    <Color x:Key="CardBorderColor">#14FFFFFF</Color>
     <Color x:Key="TextPrimaryColor">#FFFFFFFF</Color>
-    <Color x:Key="TextSecondaryColor">#FFB3B3B3</Color>
-    <Color x:Key="AccentColor">#FF4FD8E8</Color>
-    <Color x:Key="AccentHoverColor">#FF69E2F0</Color>
-    <Color x:Key="AccentPressedColor">#FF30C2D6</Color>
-    <Color x:Key="AccentForegroundColor">#FF06303D</Color>
-    <Color x:Key="ButtonBackgroundColor">#FF383838</Color>
-    <Color x:Key="ButtonHoverColor">#FF3F3F3F</Color>
-    <Color x:Key="ButtonPressedColor">#FF343434</Color>
-    <Color x:Key="ButtonBorderColor">#FF454545</Color>
-    <Color x:Key="DividerColor">#FF3A3A3A</Color>
-    <Color x:Key="InputBackgroundColor">#FF383838</Color>
-    <Color x:Key="InputHoverColor">#FF3F3F3F</Color>
-    <Color x:Key="InputBorderColor">#FF4A4A4A</Color>
-    <Color x:Key="SubtleBackgroundColor">#FF333333</Color>
-    <Color x:Key="PreviewBackgroundColor">#FF111111</Color>
-    <Color x:Key="TrackBackgroundColor">#FF6A6A6A</Color>
+    <Color x:Key="TextSecondaryColor">#FFA0A0A0</Color>
+    <Color x:Key="AccentColor">#FF60CDFF</Color>
+    <Color x:Key="AccentHoverColor">#FF50BCEB</Color>
+    <Color x:Key="AccentPressedColor">#FF3AAEDC</Color>
+    <Color x:Key="AccentForegroundColor">#FF000000</Color>
+    <Color x:Key="ButtonBackgroundColor">#FF2B2B2B</Color>
+    <Color x:Key="ButtonHoverColor">#FF323232</Color>
+    <Color x:Key="ButtonPressedColor">#FF262626</Color>
+    <Color x:Key="ButtonBorderColor">#1AFFFFFF</Color>
+    <Color x:Key="DividerColor">#14FFFFFF</Color>
+    <Color x:Key="InputBackgroundColor">#FF2B2B2B</Color>
+    <Color x:Key="InputHoverColor">#FF323232</Color>
+    <Color x:Key="InputBorderColor">#1AFFFFFF</Color>
+    <Color x:Key="SubtleBackgroundColor">#FF2E2E2E</Color>
+    <Color x:Key="PreviewBackgroundColor">#FF000000</Color>
+    <Color x:Key="TrackBackgroundColor">#FF5A5A5A</Color>
     <Color x:Key="ErrorColor">#FFFF99A4</Color>
     <Color x:Key="SuccessColor">#FF6CCB5F</Color>
 
@@ -49,9 +49,9 @@
     <SolidColorBrush x:Key="SubtleBackgroundBrush" Color="{StaticResource SubtleBackgroundColor}" />
     <SolidColorBrush x:Key="PreviewBackgroundBrush" Color="{StaticResource PreviewBackgroundColor}" />
     <SolidColorBrush x:Key="TrackBackgroundBrush" Color="{StaticResource TrackBackgroundColor}" />
-    <SolidColorBrush x:Key="AccentSoftBrush" Color="#264FD8E8" />
-    <SolidColorBrush x:Key="SuccessSoftBrush" Color="#266CCB5F" />
-    <SolidColorBrush x:Key="ErrorSoftBrush" Color="#26FF99A4" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#1460CDFF" />
+    <SolidColorBrush x:Key="SuccessSoftBrush" Color="#146CCB5F" />
+    <SolidColorBrush x:Key="ErrorSoftBrush" Color="#14FF99A4" />
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
     <!-- Retained for resource compatibility; the native UI uses a solid accent. -->
