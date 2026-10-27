@@ -117,3 +117,5 @@ jobs:
           fi
           git commit -m "Add optimized demo video, poster and preview for README [skip ci]"
           git push origin HEAD:${{ github.ref_name }}
+
+# Demo asset preparation is intentionally one-shot; remove after the assets land.
