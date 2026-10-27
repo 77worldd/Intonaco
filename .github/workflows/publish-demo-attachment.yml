@@ -80,3 +80,5 @@ jobs:
           fi
           git commit -m "Record demo attachment URL [skip ci]"
           git push origin HEAD:${{ github.ref_name }}
+
+# retry with a user-scoped token
