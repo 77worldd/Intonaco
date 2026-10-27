@@ -28,82 +28,79 @@ jobs:
           SOURCE_URL: ${{ inputs.source_url || 'https://tempfile.org/gFLPJZQSyLr/download' }}
           INFO_URL: https://tempfile.org/gFLPJZQSyLr/
         run: |
+          set +e
           set -uxo pipefail
           mkdir -p docs/demo
           LOG=docs/demo/_diagnostics.txt
-          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36'
           : > "$LOG"
+          exec > >(tee -a "$LOG") 2>&1
 
-          {
-            echo "== info page =="
-            curl -sS -L --max-time 90 -A "$UA" -c /tmp/cookies.txt \
-              -D /tmp/info.headers -o /tmp/info.html \
-              -w 'code=%{http_code} size=%{size_download} type=%{content_type}\n' "$INFO_URL"
-            head -40 /tmp/info.headers
-            echo "== lines mentioning download/mp4/cdn =="
-            grep -oiE '.{0,140}(download|\.mp4|cdn\.|storage|blob).{0,140}' /tmp/info.html | head -60
-            echo "== file api =="
-            curl -sS -L --max-time 90 -A "$UA" https://tempfile.org/api/file/gFLPJZQSyLr
-            echo
-          } >> "$LOG" 2>&1 || true
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36'
 
-          CANDIDATES=(
+          echo "== toolchain =="
+          which curl ffmpeg ffprobe python3 || true
+          if ! command -v ffprobe >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+          ffmpeg -version | head -2
+
+          echo "== download =="
+          curl -sS -L --max-time 900 --retry 3 --retry-delay 2 \
+            -A "$UA" -e "$INFO_URL" \
+            -o /tmp/intonaco-source.mp4 \
+            -w 'code=%{http_code} size=%{size_download} type=%{content_type}\n' \
             "$SOURCE_URL"
-            "https://tempfile.org/gFLPJZQSyLr/download/"
-            "https://tempfile.org/gFLPJZQSyLr/Desktop%202026.10.27%20-%2020.55.47.01.mp4"
-          )
-          OK=0
-          for U in "${CANDIDATES[@]}"; do
-            {
-              echo "== try $U =="
-              curl -sS -L --max-time 900 --retry 2 --retry-delay 2 \
-                -A "$UA" -e "$INFO_URL" -b /tmp/cookies.txt -c /tmp/cookies.txt \
-                -D /tmp/dl.headers -o /tmp/intonaco-source.mp4 \
-                -w 'code=%{http_code} size=%{size_download} type=%{content_type} url=%{url_effective}\n' "$U"
-              head -30 /tmp/dl.headers
-              ls -l /tmp/intonaco-source.mp4
-              head -c 200 /tmp/intonaco-source.mp4 | strings | head -5
-            } >> "$LOG" 2>&1 || true
-            SIZE=$(stat -c%s /tmp/intonaco-source.mp4 2>/dev/null || echo 0)
-            if [ "$SIZE" -gt 1000000 ] && head -c 12 /tmp/intonaco-source.mp4 | grep -q 'ftyp'; then
-              OK=1
-              break
-            fi
-          done
-
-          if [ "$OK" != "1" ]; then
-            echo "DOWNLOAD_FAILED" >> "$LOG"
+          ls -lh /tmp/intonaco-source.mp4
+          file /tmp/intonaco-source.mp4
+          SIZE=$(stat -c%s /tmp/intonaco-source.mp4 2>/dev/null || echo 0)
+          echo "size=$SIZE"
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "DOWNLOAD_FAILED"
             exit 1
           fi
 
-          echo "== probe ==" >> "$LOG" 2>&1
+          echo "== probe =="
           ffprobe -v error \
             -show_entries format=duration,size,bit_rate \
             -show_entries stream=codec_name,codec_type,width,height \
-            -of json /tmp/intonaco-source.mp4 | tee /tmp/probe.json >> "$LOG" 2>&1
-          python3 -m pip install --quiet pillow
-
+            -of json /tmp/intonaco-source.mp4 > /tmp/probe.json
+          cat /tmp/probe.json
           DURATION=$(ffprobe -v error -show_entries format=duration \
             -of default=nw=1:nk=1 /tmp/intonaco-source.mp4)
+          echo "duration=$DURATION"
+
+          python3 -m pip install --quiet --break-system-packages pillow || \
+            python3 -m pip install --quiet pillow || true
+          python3 -c 'import PIL; print("Pillow", PIL.__version__)'
+
           POSTER_AT=$(python3 -c "d=float('$DURATION'); print(max(0.2, min(d*0.25, 4.0)))")
           PREVIEW_START=$(python3 -c "d=float('$DURATION'); print(max(0.0, min(d*0.12, d-6.5)) if d>7 else 0.0)")
+          echo "poster_at=$POSTER_AT preview_start=$PREVIEW_START"
 
-          ffmpeg -y -hide_banner -loglevel error -i /tmp/intonaco-source.mp4 \
+          echo "== optimized mp4 =="
+          ffmpeg -y -hide_banner -loglevel warning -i /tmp/intonaco-source.mp4 \
             -map 0:v:0 -map '0:a:0?' \
             -vf "scale='min(1280,iw)':-2:flags=lanczos" \
             -c:v libx264 -preset medium -crf 26 -pix_fmt yuv420p \
             -c:a aac -b:a 96k -movflags +faststart \
             docs/demo/intonaco-demo.mp4
+          echo "mp4 rc=$?"
 
-          ffmpeg -y -hide_banner -loglevel error -ss "$POSTER_AT" \
+          echo "== poster frame =="
+          ffmpeg -y -hide_banner -loglevel warning -ss "$POSTER_AT" \
             -i /tmp/intonaco-source.mp4 -frames:v 1 \
             -vf "scale='min(1280,iw)':-2:flags=lanczos" /tmp/frame.png
+          echo "frame rc=$?"
 
-          ffmpeg -y -hide_banner -loglevel error -ss "$PREVIEW_START" -t 6 \
+          echo "== animated preview =="
+          ffmpeg -y -hide_banner -loglevel warning -ss "$PREVIEW_START" -t 6 \
             -i /tmp/intonaco-source.mp4 \
             -vf "fps=10,scale=800:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer:bayer_scale=3" \
             -loop 0 docs/demo/intonaco-demo-preview.gif
+          echo "gif rc=$?"
 
+          echo "== poster design =="
           python3 - <<'PY'
           from PIL import Image, ImageDraw, ImageFilter
           im = Image.open('/tmp/frame.png').convert('RGBA')
@@ -124,10 +121,13 @@ jobs:
           d.polygon([(cx - t//2 - 4, cy - t), (cx - t//2 - 4, cy + t), (cx + t + 2, cy)],
                     fill=(16, 22, 32, 255))
           im.convert('RGB').save('docs/demo/intonaco-demo-poster.png', optimize=True)
+          print('poster', im.size)
           PY
+          echo "poster rc=$?"
 
           cp /tmp/probe.json docs/demo/source-info.json
-          ls -lh docs/demo/ >> "$LOG" 2>&1
+          ls -lh docs/demo/
+          echo "DONE"
 
       - name: Publish results to the working branch
         if: always()
@@ -140,5 +140,5 @@ jobs:
             echo "Nothing new to commit."
             exit 0
           fi
-          git commit -m "Add README demo assets and download diagnostics [skip ci]"
+          git commit -m "Add README demo assets [skip ci]"
           git push origin HEAD:${{ github.ref_name }}
