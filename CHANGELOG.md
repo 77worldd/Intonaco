@@ -4,6 +4,50 @@ All notable changes to Intonaco are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] — 2026-10-27
+
+Hotfix: the paused-wallpaper black bars that 2.0.0 claimed to fix were still
+reproducible. 2.0.0 hardened the *container* geometry (window/host margin,
+padding, alignment, clipping), but the bars were never a container problem.
+
+### Fixed
+
+- **Black bars on the paused wallpaper (actually fixed this time).** The paused
+  wallpaper is a `RenderTargetBitmap` photograph of the `MediaElement`, so any
+  letterbox it was showing at that instant became real black pixels *inside the
+  bitmap*. The static layer then displayed that bitmap with `Stretch.Fill`,
+  which scaled the baked-in bars to full screen. Container geometry cannot
+  remove bars that are part of the image, which is why 2.0.0 did not fix it.
+  The frozen frame is now:
+  - captured after `_host.UpdateLayout()` / `MediaElement.UpdateLayout()`, so a
+    suspend triggered by a focus change, fullscreen transition, display resize
+    or DPI change can no longer photograph a stale, wrong-sized layout;
+  - captured with the media element forced to `Stretch.UniformToFill` (except in
+    the user-selected "Fit frame" mode, where the letterbox is deliberate and is
+    now identical before and after pausing instead of changing on pause);
+  - centre-cropped to the desktop host's aspect ratio by the new
+    `WallpaperPlayer.CentreCropToAspect`, applied both at capture and again in
+    `SetPausedFrame` — the single choke point every path funnels through,
+    including `PauseAt` during explorer-restart recovery, which carries a frame
+    captured against the *previous* desktop host;
+  - shown by a paused layer that covers rather than letterboxes
+    (`Stretch.UniformToFill`, zero margin, stretch alignment, re-asserted on
+    every frame), and the host grid and media element are now explicitly
+    zero-margin/stretch so the crop target is trustworthy.
+- Capture geometry is written to `%LocalAppData%\Intonaco\debug.log`
+  (`Paused frame captured 1920x1080 (host …, media …, video …, fit …,
+  captured-as cover, host aspect 1.778)`), so a mismatch can be diagnosed from
+  the log instead of guessed at.
+
+### Added
+
+- `tests/Intonaco.Tests/PausedFrameGeometryTests.cs` — regression tests that
+  reproduce the defect without a video decoder: a letterboxed bitmap wider than
+  the desktop is cropped so the black bands are physically gone from the pixels,
+  cropping stays centred (a wallpaper must not jump sideways on pause), matching
+  frames are returned untouched, an unknown host aspect is ignored, and the
+  paused/host/media layers pin cover geometry with zero inset.
+
 ## [2.0.0] — 2026-10-27
 
 Major Performance & UI Overhaul. The complete fix & overhaul plan implementation.

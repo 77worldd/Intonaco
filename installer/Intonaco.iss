@@ -6,7 +6,7 @@
 ; reinstalls and uninstall do not delete them.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "2.0.0"
+  #define MyAppVersion "2.0.1"
 #endif
 
 #ifndef PublishDir
