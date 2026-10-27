@@ -1,0 +1,82 @@
+name: Publish demo attachment
+
+on:
+  push:
+    branches: [arena/aec630d8-intonaco]
+    paths: [.github/workflows/publish-demo-attachment.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Create a GitHub-hosted inline video asset
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the working branch
+        uses: actions/checkout@v4
+
+      - name: Upload the demo to GitHub user-attachments
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          USER_TOKEN: ${{ secrets.DEMO_UPLOAD_TOKEN }}
+          REPO_ID: 1434387143
+        run: |
+          set +e
+          mkdir -p docs/demo
+          LOG=docs/demo/_attachment.txt
+          : > "$LOG"
+          exec > >(tee -a "$LOG") 2>&1
+
+          echo "== asset =="
+          ls -lh docs/demo/intonaco-demo.mp4
+
+          try_upload() {
+            LABEL="$1"; AUTH_VALUE="$2"; CT="$3"
+            echo "== attempt: $LABEL (content-type $CT) =="
+            CODE=$(curl -sS --max-time 240 -X POST \
+              "https://uploads.github.com/user-attachments/assets?name=intonaco-demo.mp4&content_type=video/mp4&repository_id=$REPO_ID" \
+              -H "Authorization: $AUTH_VALUE" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: $CT" \
+              --data-binary @docs/demo/intonaco-demo.mp4 \
+              -o /tmp/attachment-response.json -w '%{http_code}')
+            echo "http=$CODE"
+            head -c 400 /tmp/attachment-response.json
+            echo
+            if [ "$CODE" = "201" ]; then
+              URL=$(python3 -c "import json; print(json.load(open('/tmp/attachment-response.json'))['url'])" 2>/dev/null)
+              if [ -n "$URL" ]; then
+                printf '%s\n' "$URL" > docs/demo/attachment-url.txt
+                echo "SUCCESS: $URL"
+                return 0
+              fi
+            fi
+            return 1
+          }
+
+          try_upload "workflow-bearer" "Bearer $TOKEN" "application/octet-stream" && exit 0
+          try_upload "workflow-token" "token $TOKEN" "application/octet-stream" && exit 0
+          try_upload "workflow-bearer-video" "Bearer $TOKEN" "video/mp4" && exit 0
+          if [ -n "$USER_TOKEN" ]; then
+            try_upload "user-bearer" "Bearer $USER_TOKEN" "application/octet-stream" && exit 0
+            try_upload "user-token" "token $USER_TOKEN" "application/octet-stream" && exit 0
+          fi
+          echo "ALL_ATTEMPTS_FAILED"
+          exit 1
+
+      - name: Commit the attachment URL
+        if: always()
+        run: |
+          set -euxo pipefail
+          git config user.name "arena-agent"
+          git config user.email "arena-agent@users.noreply.github.com"
+          git add docs/demo || true
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit."
+            exit 0
+          fi
+          git commit -m "Record demo attachment URL [skip ci]"
+          git push origin HEAD:${{ github.ref_name }}
