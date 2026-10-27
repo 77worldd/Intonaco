@@ -22,8 +22,13 @@ namespace Intonaco
             _ownsMutex = createdNew;
             if (!createdNew)
             {
-                MessageBox.Show("Intonaco is already running.", "Intonaco",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                // A login-time launch (--minimized) must never put a dialog in
+                // the user's face; it simply yields to the running instance.
+                if (!Core.StartupManager.ShouldStartMinimized(e.Args))
+                {
+                    MessageBox.Show("Intonaco is already running.", "Intonaco",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
                 Shutdown();
                 return;
             }
