@@ -114,7 +114,9 @@
                                           ScrubbingEnabled="True"
                                           IsMuted="True"
                                           Visibility="Collapsed"
-                                          IsHitTestVisible="False" />
+                                          IsHitTestVisible="False"
+                                          MediaOpened="OnPreviewMediaOpened"
+                                          MediaEnded="OnPreviewMediaEnded" />
 
                             <Image x:Name="PreviewImage"
                                    Stretch="UniformToFill"
@@ -467,17 +469,37 @@
 
                         <Border Height="1" Margin="16,0" Background="{DynamicResource DividerBrush}" />
 
-                        <CheckBox x:Name="PauseFullscreenToggle"
-                                  Style="{StaticResource IntonacoToggle}"
-                                  Margin="16,10"
-                                  Checked="OnSettingChanged"
-                                  Unchecked="OnSettingChanged">
-                            <StackPanel>
-                                <TextBlock Text="Pause when other apps are focused" Style="{StaticResource SettingTitleText}" />
-                                <TextBlock Text="Pause wallpaper while you're using other apps to save resources"
-                                           Style="{StaticResource SettingDescriptionText}" />
+                        <!-- Background animation mode: an explicit choice of
+                             two behaviours, persisted across restarts. Manual
+                             pause is separate and always wins. -->
+                        <Grid Margin="16,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center"
+                                        Margin="0,0,12,0">
+                                <TextBlock Text="Background animation when unfocused"
+                                           Style="{StaticResource SettingTitleText}" />
+                                <TextBlock Text="Choose what happens when you switch to another app. Your manual pause is never overridden."
+                                           Style="{StaticResource SettingDescriptionText}"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
-                        </CheckBox>
+
+                            <ComboBox x:Name="BackgroundAnimationComboBox"
+                                      Grid.Column="1"
+                                      Style="{StaticResource IntonacoComboBox}"
+                                      Width="232"
+                                      VerticalAlignment="Center"
+                                      SelectionChanged="OnBackgroundAnimationModeChanged">
+                                <ComboBoxItem Content="Pause when app loses focus (default)"
+                                              Tag="PauseWhenUnfocused"
+                                              IsSelected="True" />
+                                <ComboBoxItem Content="Keep animating when unfocused"
+                                              Tag="ContinueWhenUnfocused" />
+                            </ComboBox>
+                        </Grid>
                     </StackPanel>
                 </Border>
 
