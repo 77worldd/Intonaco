@@ -8,6 +8,16 @@
         AllowsTransparency="False"
         Background="Black"
         ResizeMode="NoResize"
-        Width="800" Height="600">
-    <Grid x:Name="ContentGrid" Background="Black" />
+        Padding="0" Margin="0"
+        Width="800" Height="600"
+        Topmost="False">
+    <!-- Strict cover mode: no black bars regardless of play/pause.
+         The Grid fills 100vw/100vh of the parent WorkerW/Progman,
+         background stays black, and media is always UniformToFill. -->
+    <Grid x:Name="ContentGrid"
+          Background="Black"
+          Margin="0"
+          ClipToBounds="True"
+          HorizontalAlignment="Stretch"
+          VerticalAlignment="Stretch" />
 </Window>

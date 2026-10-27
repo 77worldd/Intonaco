@@ -473,8 +473,8 @@
                                   Checked="OnSettingChanged"
                                   Unchecked="OnSettingChanged">
                             <StackPanel>
-                                <TextBlock Text="Pause for fullscreen apps" Style="{StaticResource SettingTitleText}" />
-                                <TextBlock Text="Pause while a fullscreen app is active"
+                                <TextBlock Text="Pause when other apps are focused" Style="{StaticResource SettingTitleText}" />
+                                <TextBlock Text="Pause wallpaper while you're using other apps to save resources"
                                            Style="{StaticResource SettingDescriptionText}" />
                             </StackPanel>
                         </CheckBox>
@@ -609,8 +609,10 @@
                     <MenuItem x:Name="TrayShowItem" Header="Show Intonaco" Click="OnTrayShow" FontWeight="Bold" />
                     <Separator />
                     <MenuItem x:Name="TrayPlayPauseItem" Header="Play" Click="OnTrayPlayPause" />
+                    <MenuItem Header="Choose video…" Click="OnTrayChooseVideo" />
                     <MenuItem x:Name="TrayMuteItem" Header="Mute" Click="OnTrayToggleMute" />
                     <Separator />
+                    <MenuItem Header="Settings" Click="OnTraySettings" />
                     <MenuItem Header="Exit" Click="OnTrayExit" />
                 </ContextMenu>
             </tb:TaskbarIcon.ContextMenu>
