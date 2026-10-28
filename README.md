@@ -308,4 +308,4 @@ This project is licensed under the [MIT License](LICENSE).
 Intonaco uses the WorkerW desktop integration technique documented by the Windows development community. Video playback is handled entirely by Windows Media Foundation.
 
 - Hardcodet.NotifyIcon.Wpf — System tray integration (MIT License)
-- The desktop-integration Intonaco is an independent reimplementation. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- The desktop-integration Intonaco is an independent creation.
